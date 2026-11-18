@@ -1,0 +1,16 @@
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: httpproxy-added-first
+spec:
+  event: First Proxy Added
+  match:
+    resource:
+      group: networking.datumapis.com
+      resource: httpproxies
+    verbs: [create]
+    conditions:
+      - name: human
+        expression: '!user.username.startsWith("system:")'
+  trigger:
+    type: Once

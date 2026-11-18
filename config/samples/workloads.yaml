@@ -1,0 +1,50 @@
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: workload-deployed-first
+spec:
+  event: First Workload Deployed
+  match:
+    resource:
+      group: compute.datumapis.com
+      resource: workloads
+    verbs: [create]
+    conditions:
+      - name: human
+        expression: '!user.username.startsWith("system:")'
+  trigger:
+    type: Once
+---
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: workloads-org-over-10
+spec:
+  event: Organization Workloads Over 10
+  subject: Organization
+  match:
+    resource:
+      group: compute.datumapis.com
+      resource: workloads
+    verbs: [create, delete]
+  trigger:
+    type: Threshold
+    threshold:
+      atLeast: 11
+---
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: workload-removed
+spec:
+  event: Workload Removed
+  match:
+    resource:
+      group: compute.datumapis.com
+      resource: workloads
+    verbs: [delete]
+    conditions:
+      - name: human
+        expression: '!user.username.startsWith("system:")'
+  trigger:
+    type: Every

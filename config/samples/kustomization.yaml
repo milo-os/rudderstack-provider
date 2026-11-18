@@ -1,0 +1,13 @@
+## TrackingRules for the product analytics event list. Rows that are not
+## covered here (payment completed, desktop app download, DNS zones, load
+## balancers, tunnels, Galactic usage) are tracked in docs/architecture.md.
+resources:
+- user-signed-up.yaml
+- project-created-first.yaml
+- domains.yaml
+- httpproxy-added-first.yaml
+- workloads.yaml
+- contributors.yaml
+- datumctl.yaml
+- user-inactive.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples
