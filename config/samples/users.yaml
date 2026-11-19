@@ -6,15 +6,12 @@ metadata:
   name: user-signed-up
 spec:
   event: Signed Up
-  call: Track
   userId: object.metadata.name
   match:
     resource:
       group: iam.miloapis.com
       resource: users
     verbs: [create]
-  trigger:
-    type: Every
 ---
 apiVersion: analytics.miloapis.com/v1alpha1
 kind: TrackingRule
@@ -29,8 +26,6 @@ spec:
       group: iam.miloapis.com
       resource: users
     verbs: [create]
-  trigger:
-    type: Every
   properties:
     - name: email
       expression: object.spec.email

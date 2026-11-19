@@ -94,10 +94,10 @@ func (p *Processor) calls(ev *audit.Event) []rudderstack.Message {
 }
 
 // unsupported returns why a rule cannot be evaluated by this version, or ""
-// when it can. Stateful triggers and group calls arrive in later phases.
+// when it can. Limits and group calls arrive with organization resolution.
 func unsupported(spec *analyticsv1alpha1.TrackingRuleSpec) string {
-	if spec.Trigger.Type != analyticsv1alpha1.TriggerEvery {
-		return "trigger_" + strings.ToLower(string(spec.Trigger.Type))
+	if spec.Limit != "" {
+		return "limit_" + strings.ToLower(string(spec.Limit))
 	}
 	if spec.Call == analyticsv1alpha1.CallGroup {
 		return "call_group"

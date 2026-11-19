@@ -77,7 +77,6 @@ var domainAdded = analyticsv1alpha1.TrackingRuleSpec{
 		Resource: &analyticsv1alpha1.ResourceSelector{Group: "networking.datumapis.com", Resource: "domains"},
 		Verbs:    []string{"create"},
 	},
-	Trigger:    analyticsv1alpha1.Trigger{Type: analyticsv1alpha1.TriggerEvery},
 	Properties: []analyticsv1alpha1.Property{{Name: "domain", Expression: "object.spec.domainName"}},
 }
 
@@ -123,8 +122,10 @@ func TestProcessorIdentify(t *testing.T) {
 }
 
 func TestProcessorAcksWithoutCalls(t *testing.T) {
-	once := domainAdded
-	once.Trigger = analyticsv1alpha1.Trigger{Type: analyticsv1alpha1.TriggerOnce}
+	limited := domainAdded
+	limited.Limit = analyticsv1alpha1.LimitOncePerDay
+	group := domainAdded
+	group.Call = analyticsv1alpha1.CallGroup
 
 	tests := []struct {
 		name  string
@@ -139,7 +140,9 @@ func TestProcessorAcksWithoutCalls(t *testing.T) {
 			}},
 		{"unmatched", map[string]analyticsv1alpha1.TrackingRuleSpec{"r": domainAdded},
 			func(t *testing.T) *fakeMsg { return auditMsg(t, map[string]any{"verb": "delete"}) }},
-		{"unsupported trigger", map[string]analyticsv1alpha1.TrackingRuleSpec{"r": once},
+		{"limit not implemented", map[string]analyticsv1alpha1.TrackingRuleSpec{"r": limited},
+			func(t *testing.T) *fakeMsg { return auditMsg(t, nil) }},
+		{"group not implemented", map[string]analyticsv1alpha1.TrackingRuleSpec{"r": group},
 			func(t *testing.T) *fakeMsg { return auditMsg(t, nil) }},
 		{"evaluation error", map[string]analyticsv1alpha1.TrackingRuleSpec{"r": domainAdded},
 			func(t *testing.T) *fakeMsg { return auditMsg(t, map[string]any{"responseObject": map[string]any{}}) }},

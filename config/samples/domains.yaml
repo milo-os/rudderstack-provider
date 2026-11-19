@@ -1,55 +1,23 @@
 apiVersion: analytics.miloapis.com/v1alpha1
 kind: TrackingRule
 metadata:
-  name: domain-added-first
+  name: domain-added
 spec:
-  event: First Domain Added
+  event: Domain Added
   match:
     resource:
       group: networking.datumapis.com
       resource: domains
     verbs: [create]
-    conditions:
-      - name: human
-        expression: '!user.username.startsWith("system:")'
-  trigger:
-    type: Once
   properties:
-    - name: domain
+    - name: name
       expression: objectRef.name
----
-apiVersion: analytics.miloapis.com/v1alpha1
-kind: TrackingRule
-metadata:
-  name: domains-added-user-over-3
-spec:
-  event: Domains Added Over 3
-  match:
-    resource:
-      group: networking.datumapis.com
-      resource: domains
-    verbs: [create, delete]
-  trigger:
-    type: Threshold
-    threshold:
-      atLeast: 4
----
-apiVersion: analytics.miloapis.com/v1alpha1
-kind: TrackingRule
-metadata:
-  name: domains-added-org-over-10
-spec:
-  event: Organization Domains Over 10
-  subject: Organization
-  match:
-    resource:
-      group: networking.datumapis.com
-      resource: domains
-    verbs: [create, delete]
-  trigger:
-    type: Threshold
-    threshold:
-      atLeast: 11
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'user.username.startsWith("system:") ? "system" : "human"'
 ---
 apiVersion: analytics.miloapis.com/v1alpha1
 kind: TrackingRule
@@ -62,11 +30,12 @@ spec:
       group: networking.datumapis.com
       resource: domains
     verbs: [delete]
-    conditions:
-      - name: human
-        expression: '!user.username.startsWith("system:")'
-  trigger:
-    type: Every
   properties:
-    - name: domain
+    - name: name
       expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'user.username.startsWith("system:") ? "system" : "human"'

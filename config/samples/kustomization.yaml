@@ -1,13 +1,19 @@
-## TrackingRules for the product analytics event list. Rows that are not
-## covered here (payment completed, desktop app download, DNS zones, load
-## balancers, tunnels, Galactic usage) are tracked in docs/architecture.md.
+## TrackingRules for the product analytics event catalog in
+## docs/architecture.md. DNS zones, load balancers and tunnels are added once
+## their resource kinds are confirmed.
+##
+## Add/remove rules match every actor, not only humans: resources are often
+## removed by the system (the garbage collector deletes a project's
+## resources), and Profiles needs every removal to keep counts right. The
+## changeSource property lets Profiles count only human actions where that
+## matters, and name/namespace/project identify the resource so a removal can
+## be matched to its add whoever made it.
 resources:
-- user-signed-up.yaml
-- project-created-first.yaml
+- users.yaml
+- projects.yaml
 - domains.yaml
-- httpproxy-added-first.yaml
+- proxies.yaml
 - workloads.yaml
 - contributors.yaml
-- datumctl.yaml
-- user-inactive.yaml
+- activity.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

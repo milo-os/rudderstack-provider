@@ -50,10 +50,6 @@ var _ = Describe("TrackingRule Controller", func() {
 						{Name: "human", Expression: condition},
 					},
 				},
-				Trigger: analyticsv1alpha1.Trigger{
-					Type:      analyticsv1alpha1.TriggerThreshold,
-					Threshold: &analyticsv1alpha1.ThresholdTrigger{AtLeast: 1},
-				},
 			},
 		}
 	}
@@ -90,9 +86,9 @@ var _ = Describe("TrackingRule Controller", func() {
 		Expect(cond.Message).To(ContainSubstring(`condition "human"`))
 	})
 
-	It("rejects a Threshold trigger without a threshold", func() {
-		rule := newRule("no-threshold", "true")
-		rule.Spec.Trigger.Threshold = nil
+	It("rejects an unknown limit", func() {
+		rule := newRule("unknown-limit", "true")
+		rule.Spec.Limit = "OncePerHour"
 		Expect(k8sClient.Create(ctx, rule)).NotTo(Succeed())
 	})
 

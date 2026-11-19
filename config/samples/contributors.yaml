@@ -10,25 +10,34 @@ spec:
       group: resourcemanager.miloapis.com
       resource: organizationmemberships
     verbs: [create]
-    conditions:
-      - name: human
-        expression: '!user.username.startsWith("system:")'
-  trigger:
-    type: Every
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'user.username.startsWith("system:") ? "system" : "human"'
 ---
 apiVersion: analytics.miloapis.com/v1alpha1
 kind: TrackingRule
 metadata:
-  name: contributors-org-over-10
+  name: contributor-removed
 spec:
-  event: Organization Contributors Over 10
+  event: Contributor Removed
   subject: Organization
   match:
     resource:
       group: resourcemanager.miloapis.com
       resource: organizationmemberships
-    verbs: [create, delete]
-  trigger:
-    type: Threshold
-    threshold:
-      atLeast: 11
+    verbs: [delete]
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'user.username.startsWith("system:") ? "system" : "human"'

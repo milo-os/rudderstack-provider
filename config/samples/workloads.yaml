@@ -1,36 +1,23 @@
 apiVersion: analytics.miloapis.com/v1alpha1
 kind: TrackingRule
 metadata:
-  name: workload-deployed-first
+  name: workload-added
 spec:
-  event: First Workload Deployed
+  event: Workload Deployed
   match:
     resource:
       group: compute.datumapis.com
       resource: workloads
     verbs: [create]
-    conditions:
-      - name: human
-        expression: '!user.username.startsWith("system:")'
-  trigger:
-    type: Once
----
-apiVersion: analytics.miloapis.com/v1alpha1
-kind: TrackingRule
-metadata:
-  name: workloads-org-over-10
-spec:
-  event: Organization Workloads Over 10
-  subject: Organization
-  match:
-    resource:
-      group: compute.datumapis.com
-      resource: workloads
-    verbs: [create, delete]
-  trigger:
-    type: Threshold
-    threshold:
-      atLeast: 11
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'user.username.startsWith("system:") ? "system" : "human"'
 ---
 apiVersion: analytics.miloapis.com/v1alpha1
 kind: TrackingRule
@@ -43,8 +30,12 @@ spec:
       group: compute.datumapis.com
       resource: workloads
     verbs: [delete]
-    conditions:
-      - name: human
-        expression: '!user.username.startsWith("system:")'
-  trigger:
-    type: Every
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'user.username.startsWith("system:") ? "system" : "human"'

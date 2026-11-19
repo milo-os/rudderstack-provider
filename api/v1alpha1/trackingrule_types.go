@@ -46,28 +46,18 @@ const (
 	SubjectOrganization SubjectType = "Organization"
 )
 
-// TriggerType decides when a matching audit event produces a call.
-// +kubebuilder:validation:Enum=Every;Once;Threshold;Inactivity;Frequency
-type TriggerType string
+// LimitType caps how often a rule sends.
+// +kubebuilder:validation:Enum=OncePerDay
+type LimitType string
 
 const (
-	// TriggerEvery fires once for every matching audit event.
-	TriggerEvery TriggerType = "Every"
-	// TriggerOnce fires the first time a subject matches, and never again.
-	// Use it for "first X" events.
-	TriggerOnce TriggerType = "Once"
-	// TriggerThreshold fires once per subject when the number of distinct
-	// resources it holds first reaches the threshold.
-	TriggerThreshold TriggerType = "Threshold"
-	// TriggerInactivity fires when a subject has not been seen for a period.
-	TriggerInactivity TriggerType = "Inactivity"
-	// TriggerFrequency fires when a subject has been seen on enough distinct
-	// days within a window.
-	TriggerFrequency TriggerType = "Frequency"
+	// LimitOncePerDay sends at most one call per rule and subject per UTC
+	// day. Use it for activity signals, such as "datumctl Used", whose
+	// matching requests would otherwise flood RudderStack.
+	LimitOncePerDay LimitType = "OncePerDay"
 )
 
 // TrackingRuleSpec defines which audit events become RudderStack calls.
-// +kubebuilder:validation:XValidation:rule="!has(self.call) || self.call == 'Track' || self.trigger.type == 'Every'",message="identify and group calls require the Every trigger"
 type TrackingRuleSpec struct {
 	// Event is the RudderStack event name, for example "Domain Added". Use
 	// Object + Action naming. Ignored for Identify and Group calls.
@@ -86,7 +76,7 @@ type TrackingRuleSpec struct {
 	Match Match `json:"match"`
 
 	// Subject is who the event is about: the acting user, or the organization
-	// that owns the resource.
+	// that owns the resource. Once-per-day limits are counted per subject.
 	// +kubebuilder:default=User
 	// +optional
 	Subject SubjectType `json:"subject,omitempty"`
@@ -98,9 +88,10 @@ type TrackingRuleSpec struct {
 	// +optional
 	UserID string `json:"userId,omitempty"`
 
-	// Trigger decides when matching events produce a call.
-	// +required
-	Trigger Trigger `json:"trigger"`
+	// Limit caps how often the rule sends. When unset, every matching event
+	// is sent.
+	// +optional
+	Limit LimitType `json:"limit,omitempty"`
 
 	// Properties are sent with the call (as traits for Identify and Group).
 	// Only fields listed here leave the platform.
@@ -171,56 +162,6 @@ type Condition struct {
 	Expression string `json:"expression"`
 }
 
-// Trigger decides when matching events produce a call.
-// +kubebuilder:validation:XValidation:rule="(self.type == 'Threshold') == has(self.threshold)",message="threshold must be set exactly when type is Threshold"
-// +kubebuilder:validation:XValidation:rule="(self.type == 'Inactivity') == has(self.inactivity)",message="inactivity must be set exactly when type is Inactivity"
-// +kubebuilder:validation:XValidation:rule="(self.type == 'Frequency') == has(self.frequency)",message="frequency must be set exactly when type is Frequency"
-type Trigger struct {
-	// Type is the trigger kind.
-	// +required
-	Type TriggerType `json:"type"`
-
-	// +optional
-	Threshold *ThresholdTrigger `json:"threshold,omitempty"`
-
-	// +optional
-	Inactivity *InactivityTrigger `json:"inactivity,omitempty"`
-
-	// +optional
-	Frequency *FrequencyTrigger `json:"frequency,omitempty"`
-}
-
-// ThresholdTrigger fires once per subject when the number of distinct
-// resources it holds first reaches AtLeast. Creates add a resource and deletes
-// remove it, so the count reflects resources that currently exist.
-type ThresholdTrigger struct {
-	// AtLeast is the count that fires the rule. Use 1 for "first X".
-	// +kubebuilder:validation:Minimum=1
-	// +required
-	AtLeast int32 `json:"atLeast"`
-}
-
-// InactivityTrigger fires when a subject has not been seen for After. It fires
-// again only after the subject becomes active and then inactive once more.
-type InactivityTrigger struct {
-	// After is how long a subject must be inactive, for example "336h".
-	// +required
-	After metav1.Duration `json:"after"`
-}
-
-// FrequencyTrigger fires when a subject has been seen on at least Days
-// distinct days within Window.
-type FrequencyTrigger struct {
-	// Days is the number of distinct active days required.
-	// +kubebuilder:validation:Minimum=1
-	// +required
-	Days int32 `json:"days"`
-
-	// Window is the period the days are counted over, for example "336h".
-	// +required
-	Window metav1.Duration `json:"window"`
-}
-
 // Property is a named value sent with the call.
 type Property struct {
 	// Name is the property name in RudderStack.
@@ -255,7 +196,7 @@ type TrackingRuleStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster
 // +kubebuilder:printcolumn:name="Event",type=string,JSONPath=`.spec.event`
-// +kubebuilder:printcolumn:name="Trigger",type=string,JSONPath=`.spec.trigger.type`
+// +kubebuilder:printcolumn:name="Limit",type=string,JSONPath=`.spec.limit`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 

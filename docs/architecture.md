@@ -77,14 +77,18 @@ CEL expressions can read `verb`, `user`, `userAgent`, `objectRef`, `object`
 and `tenant`. The controller compiles every expression and sets the rule's
 `Ready` condition; rules that are not Ready are not evaluated.
 
-> The current API still has `Once`, `Threshold`, `Inactivity` and
-> `Frequency` triggers from the original plan. Phase 3 replaces the trigger
-> with `limit` (see [Phases](#phases)).
-
 ### Event catalog
 
 Every "added" event has a matching "removed" event so Profiles can compute
-current counts.
+current counts. These rules match every actor, not only humans: resources are
+often removed by the system (deleting a project makes the garbage collector
+delete its resources), and a missed removal would leave a count too high for
+good. Each event carries:
+
+- `name`, `namespace` and `project`, which identify the resource, so Profiles
+  matches a removal to its add regardless of who made either.
+- `changeSource` (`human` or `system`), so milestones such as "user removes
+  domains" can count only human actions.
 
 | Event | Source | Feeds |
 |---|---|---|
@@ -108,9 +112,10 @@ Illustrative definitions. The Profiles project defines them precisely.
 | Milestone | Definition over BigQuery events |
 |---|---|
 | First domain | `min(timestamp)` of `Domain Added` per user |
-| > 3 domains (user) | `count(Domain Added) - count(Domain Removed)` per user > 3 |
+| > 3 domains (user) | Domains the user added, keyed by `project`/`name`, with no later `Domain Removed`, > 3 |
 | > 10 domains (org) | Same per `context.groupId` > 10 |
-| > 4 active tunnels | `count(Tunnel Added) - count(Tunnel Removed)` > 4 |
+| > 4 active tunnels | Tunnels added with no later `Tunnel Removed` > 4 |
+| Removes domains | `Domain Removed` with `changeSource = human` |
 | Frequent datumctl user | Distinct days with `datumctl Used` in the last 14 ≥ N |
 | Inactive > 14 days | `max(timestamp)` of `Active` older than 14 days |
 
@@ -184,8 +189,8 @@ organizations. It runs once, before milestones are switched on for marketing.
 |---|---|---|
 | 1 | Scaffold, `TrackingRule` CRD, CEL compilation and Ready condition, samples | Done (#3) |
 | 2 | Audit consumer, `Every` rules, RudderStack sink, dry-run | Done (#4) |
-| 3 | Replace triggers with the optional `limit`; add the "removed" rules; update samples to the event catalog | Next |
-| 4 | Once-per-day limit (NATS KV), `datumctl Used` and `Active`, organization resolution and `group` calls | |
+| 3 | Replace triggers with the optional `limit`; add the "removed" rules; update samples to the event catalog | Done (#4) |
+| 4 | Once-per-day limit (NATS KV), which turns on `datumctl Used` and `Active`; organization resolution and `group` calls | Next |
 | 5 | Infra: BigQuery `product_analytics` dataset, RudderStack loader service account and GCS staging bucket (Pulumi, `infra/gcp`); NACK consumer and KV bucket, NATS client certificate, write key ExternalSecret, Milo CRD; staging in dry-run, then live | |
 | 6 | Backfill job | |
 | 7 | Profiles project for the milestones, and audiences to the marketing tool | Owner to decide |

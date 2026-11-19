@@ -25,14 +25,11 @@ spec:
       group: networking.datumapis.com
       resource: domains
     verbs: [create]
-    conditions:
-      - name: human
-        expression: '!user.username.startsWith("system:")'
-  trigger:
-    type: Every
   properties:
-    - name: domain
+    - name: name
       expression: objectRef.name
+    - name: changeSource
+      expression: 'user.username.startsWith("system:") ? "system" : "human"'
 ```
 
 Milestones such as "first domain" or "more than 3 domains" are computed from

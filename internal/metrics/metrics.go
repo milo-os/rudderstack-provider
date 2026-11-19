@@ -39,11 +39,11 @@ var (
 	}, []string{labelRule})
 
 	// RulesSkipped counts rule evaluations skipped because the rule uses a
-	// feature this version does not implement yet.
+	// limit or call this version does not implement yet.
 	RulesSkipped = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Name:      "rules_skipped_total",
-		Help:      "Rule evaluations skipped because the rule's trigger or call is not supported yet.",
+		Help:      "Rule evaluations skipped because the rule's limit or call is not supported yet.",
 	}, []string{labelRule, "reason"})
 
 	// Calls counts RudderStack calls by outcome: sent or dropped.

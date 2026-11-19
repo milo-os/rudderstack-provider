@@ -18,8 +18,8 @@ spec:
     - jsonPath: .spec.event
       name: Event
       type: string
-    - jsonPath: .spec.trigger.type
-      name: Trigger
+    - jsonPath: .spec.limit
+      name: Limit
       type: string
     - jsonPath: .status.conditions[?(@.type=="Ready")].status
       name: Ready
@@ -67,6 +67,13 @@ spec:
                   Object + Action naming. Ignored for Identify and Group calls.
                 maxLength: 128
                 minLength: 1
+                type: string
+              limit:
+                description: |-
+                  Limit caps how often the rule sends. When unset, every matching event
+                  is sent.
+                enum:
+                - OncePerDay
                 type: string
               match:
                 description: Match selects the audit events this rule applies to.
@@ -174,78 +181,11 @@ spec:
                 default: User
                 description: |-
                   Subject is who the event is about: the acting user, or the organization
-                  that owns the resource.
+                  that owns the resource. Once-per-day limits are counted per subject.
                 enum:
                 - User
                 - Organization
                 type: string
-              trigger:
-                description: Trigger decides when matching events produce a call.
-                properties:
-                  frequency:
-                    description: |-
-                      FrequencyTrigger fires when a subject has been seen on at least Days
-                      distinct days within Window.
-                    properties:
-                      days:
-                        description: Days is the number of distinct active days required.
-                        format: int32
-                        minimum: 1
-                        type: integer
-                      window:
-                        description: Window is the period the days are counted over,
-                          for example "336h".
-                        type: string
-                    required:
-                    - days
-                    - window
-                    type: object
-                  inactivity:
-                    description: |-
-                      InactivityTrigger fires when a subject has not been seen for After. It fires
-                      again only after the subject becomes active and then inactive once more.
-                    properties:
-                      after:
-                        description: After is how long a subject must be inactive,
-                          for example "336h".
-                        type: string
-                    required:
-                    - after
-                    type: object
-                  threshold:
-                    description: |-
-                      ThresholdTrigger fires once per subject when the number of distinct
-                      resources it holds first reaches AtLeast. Creates add a resource and deletes
-                      remove it, so the count reflects resources that currently exist.
-                    properties:
-                      atLeast:
-                        description: AtLeast is the count that fires the rule. Use
-                          1 for "first X".
-                        format: int32
-                        minimum: 1
-                        type: integer
-                    required:
-                    - atLeast
-                    type: object
-                  type:
-                    description: Type is the trigger kind.
-                    enum:
-                    - Every
-                    - Once
-                    - Threshold
-                    - Inactivity
-                    - Frequency
-                    type: string
-                required:
-                - type
-                type: object
-                x-kubernetes-validations:
-                - message: threshold must be set exactly when type is Threshold
-                  rule: (self.type == 'Threshold') == has(self.threshold)
-                - message: inactivity must be set exactly when type is Inactivity
-                  rule: (self.type == 'Inactivity') == has(self.inactivity)
-                - message: frequency must be set exactly when type is Frequency
-                  rule: (self.type == 'Frequency') == has(self.frequency)
               userId:
                 description: |-
                   UserID is a CEL expression for the RudderStack userId, over the same
@@ -256,12 +196,7 @@ spec:
             required:
             - event
             - match
-            - trigger
             type: object
-            x-kubernetes-validations:
-            - message: identify and group calls require the Every trigger
-              rule: '!has(self.call) || self.call == ''Track'' || self.trigger.type
-                == ''Every'''
           status:
             description: status defines the observed state of TrackingRule
             properties:
