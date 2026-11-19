@@ -3,7 +3,8 @@
 Sends product analytics to [RudderStack] from Milo platform activity. The
 provider consumes Kubernetes audit events from NATS JetStream, evaluates them
 against `TrackingRule` resources, and sends `track`, `identify` and `group`
-calls. It shares its design with [search].
+calls. Milestones are computed downstream in BigQuery by RudderStack
+Profiles. It shares its design with [search].
 
 See [docs/architecture.md](docs/architecture.md) for the design.
 
@@ -16,19 +17,26 @@ See [docs/architecture.md](docs/architecture.md) for the design.
 apiVersion: analytics.miloapis.com/v1alpha1
 kind: TrackingRule
 metadata:
-  name: domains-added-user-over-3
+  name: domain-added
 spec:
-  event: Domains Added Over 3
+  event: Domain Added
   match:
     resource:
       group: networking.datumapis.com
       resource: domains
-    verbs: [create, delete]
+    verbs: [create]
+    conditions:
+      - name: human
+        expression: '!user.username.startsWith("system:")'
   trigger:
-    type: Threshold
-    threshold:
-      atLeast: 4
+    type: Every
+  properties:
+    - name: domain
+      expression: objectRef.name
 ```
+
+Milestones such as "first domain" or "more than 3 domains" are computed from
+these events in BigQuery by RudderStack Profiles, not by the provider.
 
 The rules for the analytics event list are in [config/samples](config/samples).
 
