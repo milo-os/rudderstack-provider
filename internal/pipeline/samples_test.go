@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -51,7 +52,7 @@ func sampleProcessor(t *testing.T) (*Processor, *recordingSubmitter) {
 		_ = f.Close()
 	}
 	sub := &recordingSubmitter{}
-	return &Processor{Rules: store, Batcher: sub, Log: logr.Discard()}, sub
+	return &Processor{Rules: store, Batcher: sub, Orgs: testOrgs(), Limiter: &fakeLimiter{}, Log: logr.Discard()}, sub
 }
 
 func projectScope(name string) map[string]any {
@@ -61,20 +62,37 @@ func projectScope(name string) map[string]any {
 	}
 }
 
-func onlyCall(t *testing.T, sub *recordingSubmitter) rudderstack.Message {
+// callFor returns the one call for event. The test events also match the
+// activity signal rules, which are checked separately.
+func callFor(t *testing.T, sub *recordingSubmitter, event string) rudderstack.Message {
 	t.Helper()
-	if len(sub.calls) != 1 {
-		t.Fatalf("calls = %+v, want exactly one", sub.calls)
+	var found []rudderstack.Message
+	for _, c := range sub.calls {
+		if c.Event == event {
+			found = append(found, c)
+		}
 	}
-	return sub.calls[0]
+	if len(found) != 1 {
+		t.Fatalf("calls = %+v, want exactly one %q", sub.calls, event)
+	}
+	return found[0]
+}
+
+func events(sub *recordingSubmitter) []string {
+	out := make([]string, 0, len(sub.calls))
+	for _, c := range sub.calls {
+		out = append(out, c.Event)
+	}
+	slices.Sort(out)
+	return out
 }
 
 func TestSampleDomainAddedByHuman(t *testing.T) {
 	p, sub := sampleProcessor(t)
 	p.Handle(auditMsg(t, map[string]any{"annotations": projectScope("p1")}))
 
-	c := onlyCall(t, sub)
-	if c.Event != "Domain Added" || c.UserID != "u1" {
+	c := callFor(t, sub, "Domain Added")
+	if c.UserID != "u1" || c.Context["groupId"] != "acme" {
 		t.Fatalf("call = %+v", c)
 	}
 	want := map[string]any{"name": "example-com", "namespace": "", "project": "p1", "changeSource": "human"}
@@ -97,10 +115,13 @@ func TestSampleDomainRemovedByGarbageCollector(t *testing.T) {
 		"annotations":    projectScope("p1"),
 	}))
 
-	c := onlyCall(t, sub)
-	if c.Event != "Domain Removed" || c.Properties["changeSource"] != "system" ||
-		c.Properties["name"] != "example-com" || c.Properties["project"] != "p1" {
+	c := callFor(t, sub, "Domain Removed")
+	if c.Properties["changeSource"] != "system" || c.Properties["name"] != "example-com" || c.Properties["project"] != "p1" {
 		t.Fatalf("call = %+v", c)
+	}
+	// The garbage collector is not a user, whatever its user agent.
+	if got := events(sub); !slices.Equal(got, []string{"Domain Removed"}) {
+		t.Fatalf("events = %v, want only Domain Removed", got)
 	}
 }
 
@@ -111,23 +132,47 @@ func TestSampleProjectOutsideProjectScope(t *testing.T) {
 		"objectRef": map[string]any{"apiGroup": "resourcemanager.miloapis.com", "resource": "projects", "name": "p1"},
 	}))
 
-	c := onlyCall(t, sub)
-	if c.Event != "Project Created" || c.Properties["project"] != "" || c.Context["groupId"] != "acme" {
+	c := callFor(t, sub, "Project Created")
+	if c.Properties["project"] != "" || c.Context["groupId"] != "acme" {
 		t.Fatalf("call = %+v", c)
 	}
 }
 
 func TestSampleActivitySignalsAreLimited(t *testing.T) {
-	// datumctl Used and Active carry limit: OncePerDay, which is skipped
-	// until the limit is implemented, so a plain read sends nothing.
+	// A human's datumctl read sends datumctl Used and Active once a day.
 	p, sub := sampleProcessor(t)
-	msg := auditMsg(t, map[string]any{"verb": "list", "objectRef": nil})
-	p.Handle(msg)
+	p.Handle(auditMsg(t, map[string]any{"verb": "list", "objectRef": nil}))
+	p.Handle(auditMsg(t, map[string]any{"auditID": "a2", "verb": "list", "objectRef": nil}))
 
-	if len(sub.calls) != 0 {
-		t.Fatalf("calls = %+v, want none until the once-per-day limit exists", sub.calls)
+	if got := events(sub); !slices.Equal(got, []string{"Active", "datumctl Used"}) {
+		t.Fatalf("events = %v, want Active and datumctl Used once each", got)
 	}
-	if acked, _ := msg.state(); !acked {
-		t.Fatal("message was not acked")
+}
+
+func TestSampleConsoleRequestIsActiveOnly(t *testing.T) {
+	p, sub := sampleProcessor(t)
+	p.Handle(auditMsg(t, map[string]any{"verb": "list", "objectRef": nil, "userAgent": "Mozilla/5.0"}))
+
+	if got := events(sub); !slices.Equal(got, []string{"Active"}) {
+		t.Fatalf("events = %v, want only Active", got)
+	}
+}
+
+func TestSampleOrganizationTraits(t *testing.T) {
+	p, sub := sampleProcessor(t)
+	p.Handle(auditMsg(t, map[string]any{
+		"verb":      "create",
+		"userAgent": "Mozilla/5.0",
+		"objectRef": map[string]any{"apiGroup": "resourcemanager.miloapis.com", "resource": "organizations"},
+		"responseObject": map[string]any{"metadata": map[string]any{
+			"name":        "globex",
+			"annotations": map[string]any{"kubernetes.io/display-name": "Globex Corp"},
+		}},
+		"annotations": nil,
+	}))
+
+	c := callFor(t, sub, "")
+	if c.Type != rudderstack.TypeGroup || c.GroupID != "globex" || c.Traits["displayName"] != "Globex Corp" || c.Traits["name"] != "globex" {
+		t.Fatalf("call = %+v", c)
 	}
 }

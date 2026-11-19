@@ -70,6 +70,7 @@ change. See [`config/samples`](../config/samples).
 | `match.conditions` | CEL, OR semantics |
 | `subject` | `User` (default) or `Organization` |
 | `userId` | CEL override for the RudderStack userId |
+| `groupId` | CEL override for the RudderStack groupId; defaults to the request's organization |
 | `limit` | Optional `OncePerDay`: send at most one call per subject per UTC day |
 | `properties` | CEL values sent with the call; nothing else leaves the platform |
 
@@ -101,9 +102,9 @@ good. Each event carries:
 | `DNS Zone Added` / `DNS Zone Removed` | DNS zone resource (to confirm) | First zone, >5, >15 org, removes zones |
 | `Load Balancer Added` / `Load Balancer Removed` | To confirm | ALB added |
 | `Tunnel Added` / `Tunnel Removed` | To confirm (`Connector`?) | >4 active tunnels |
-| `datumctl Used` (once per day) | Any request with a `datumctl/` user agent | First datumctl access, frequent / active datumctl user |
+| `datumctl Used` (once per day) | Any request by a human user with a `datumctl/` user agent | First datumctl access, frequent / active datumctl user |
 | `Active` (once per day) | Any request by a human user | Inactivity > 14 days |
-| `group` (org traits) | Organization create/update | Org-level milestones |
+| `group` (`name`, `displayName`) | `resourcemanager.miloapis.com/organizations` create/update | Org-level milestones |
 
 ### Milestones in Profiles
 
@@ -136,10 +137,20 @@ Illustrative definitions. The Profiles project defines them precisely.
 
 ## State
 
-The only state is the once-per-day limit: a NATS KV bucket with a 25-hour TTL
-holding `<rule>/<subject>/<date>` keys. A key is created with compare-and-set
-before the call is queued. Losing the bucket at worst sends one extra call per
-subject that day, which RudderStack deduplicates by `messageId`.
+The only state is the once-per-day limit: a NATS KV bucket holding one key
+per rule, subject and UTC day (the subject is hashed, since user IDs can hold
+characters KV keys do not allow). Its TTL must be at least 24 hours; the
+provider refuses to start otherwise. A key is created atomically before the
+call is queued, and only the first creation sends.
+
+Every failure mode sends rather than drops, and relies on the call's
+`<rule>/<subject>/<date>` `messageId` for RudderStack to deduplicate:
+
+- A redelivered message skips the limiter. Its first delivery already took
+  the key, but its send failed.
+- If the bucket is unavailable, the call is sent and counted in
+  `rudderstack_provider_limit_errors_total`.
+- Losing the bucket sends at most one extra call per subject that day.
 
 The limit exists for cost and volume. RudderStack bills by event, and
 forwarding every datumctl or console request would multiply volume for no
@@ -153,10 +164,13 @@ analytical gain.
 | `internal/rules` | Compiles rules, evaluates them, and keeps an informer-fed store on every replica |
 | `internal/pipeline` | JetStream consumer, event processor and batcher |
 | `internal/rudderstack` | `/v1/batch` client and the dry-run sender |
+| `internal/limit` | Once-per-day limiter on NATS KV |
+| `internal/orgs` | Resolves a request's organization, keeping a project-to-organization map from an informer on Milo `Project` resources |
 | `internal/controller` | Sets each rule's Ready condition (leader only) |
 
-The consumer waits for the rule store to sync before it consumes, so events
-are never evaluated against a partial rule set. The pod reports ready once it
+The consumer waits for the rule store and the project map to sync before it
+consumes, so events are never evaluated against a partial rule set or sent
+without an organization the provider could have known. The pod reports ready once it
 is consuming.
 
 ## Identity
@@ -164,9 +178,18 @@ is consuming.
 - `userId` is the acting user's uid unless the rule sets `userId`.
 - Sign-up sends `identify` with the user's email, which is approved for
   RudderStack.
-- Organization subjects are resolved from the request's project scope through
-  an informer on Milo `Project` resources. Calls carry `context.groupId`, and
-  `group` calls send organization traits.
+- `groupId` is the organization the request was made in: the scope itself
+  when it is an organization, or the project's owner when it is a project. A
+  rule's `groupId` expression overrides it, which `group` calls for a new
+  organization need, since that request is not made inside it.
+- `track` and `identify` calls carry the organization as `context.groupId`;
+  `group` calls carry it as `groupId` with the rule's properties as traits.
+- A project the provider has not seen yet (created moments before) leaves
+  `groupId` empty and is counted in `rudderstack_provider_orgs_unresolved_total`.
+  The event is still sent: Profiles can recover the organization from the
+  project's `Project Created` event.
+- Rules with an `Organization` subject, and `group` calls, are skipped when
+  there is no organization.
 
 ## Backfill
 
@@ -190,8 +213,8 @@ organizations. It runs once, before milestones are switched on for marketing.
 | 1 | Scaffold, `TrackingRule` CRD, CEL compilation and Ready condition, samples | Done (#3) |
 | 2 | Audit consumer, `Every` rules, RudderStack sink, dry-run | Done (#4) |
 | 3 | Replace triggers with the optional `limit`; add the "removed" rules; update samples to the event catalog | Done (#4) |
-| 4 | Once-per-day limit (NATS KV), which turns on `datumctl Used` and `Active`; organization resolution and `group` calls | Next |
-| 5 | Infra: BigQuery `product_analytics` dataset, RudderStack loader service account and GCS staging bucket (Pulumi, `infra/gcp`); NACK consumer and KV bucket, NATS client certificate, write key ExternalSecret, Milo CRD; staging in dry-run, then live | |
+| 4 | Once-per-day limit (NATS KV), which turns on `datumctl Used` and `Active`; organization resolution and `group` calls | Done |
+| 5 | Infra: BigQuery `product_analytics` dataset, RudderStack loader service account and GCS staging bucket (Pulumi, `infra/gcp`); NACK consumer and KV bucket (TTL ≥ 24h), NATS client certificate, write key ExternalSecret, Milo CRD, RBAC to watch projects; staging in dry-run, then live | Next |
 | 6 | Backfill job | |
 | 7 | Profiles project for the milestones, and audiences to the marketing tool | Owner to decide |
 

@@ -29,6 +29,8 @@ type CompiledRule struct {
 	Properties map[string]cel.Program
 	// UserID is nil when the rule uses the acting user's uid.
 	UserID cel.Program
+	// GroupID is nil when the rule uses the request's organization.
+	GroupID cel.Program
 }
 
 // NewEnv returns the CEL environment rule expressions are compiled in.
@@ -75,6 +77,14 @@ func Compile(env *cel.Env, rule *analyticsv1alpha1.TrackingRule) (*CompiledRule,
 			errs = append(errs, fmt.Errorf("userId: %w", err))
 		} else {
 			cr.UserID = prg
+		}
+	}
+	if rule.Spec.GroupID != "" {
+		prg, err := compile(env, rule.Spec.GroupID, cel.StringType)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("groupId: %w", err))
+		} else {
+			cr.GroupID = prg
 		}
 	}
 	if len(errs) > 0 {

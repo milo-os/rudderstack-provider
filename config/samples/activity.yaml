@@ -10,8 +10,10 @@ spec:
   match:
     verbs: [get, list, watch, create, update, patch, delete]
     conditions:
-      - name: datumctl
-        expression: userAgent.startsWith("datumctl/")
+      # Conditions are ORed, so both checks share one expression. Service
+      # accounts (such as CI pipelines) using datumctl are not users.
+      - name: human-datumctl
+        expression: 'userAgent.startsWith("datumctl/") && !user.username.startsWith("system:")'
 ---
 apiVersion: analytics.miloapis.com/v1alpha1
 kind: TrackingRule

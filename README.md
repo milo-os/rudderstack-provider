@@ -45,6 +45,7 @@ The rules for the analytics event list are in [config/samples](config/samples).
 | `--nats-tls-cert`, `--nats-tls-key`, `--nats-tls-ca` | | NATS client TLS |
 | `--nats-stream` | `AUDIT_EVENTS` | Stream carrying audit events |
 | `--nats-consumer` | `rudderstack-provider` | Durable consumer, declared outside the provider |
+| `--nats-kv-bucket` | `rudderstack-provider-limits` | KV bucket for once-per-day limits, declared outside the provider with a TTL of at least 24h |
 | `--rudderstack-data-plane-url` | | RudderStack data plane |
 | `--dry-run` | `false` | Log calls instead of sending them |
 | `--batch-max-calls` | `100` | Calls per request |

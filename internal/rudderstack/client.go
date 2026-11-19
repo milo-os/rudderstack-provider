@@ -34,6 +34,7 @@ type Message struct {
 	Type              string         `json:"type"`
 	Event             string         `json:"event,omitempty"`
 	UserID            string         `json:"userId"`
+	GroupID           string         `json:"groupId,omitempty"`
 	MessageID         string         `json:"messageId"`
 	OriginalTimestamp time.Time      `json:"originalTimestamp"`
 	Properties        map[string]any `json:"properties,omitempty"`

@@ -68,3 +68,11 @@ func TestCheckAckWait(t *testing.T) {
 		t.Fatal("60s ackWait: expected an error")
 	}
 }
+
+func TestCheckBucketTTL(t *testing.T) {
+	for ttl, ok := range map[time.Duration]bool{0: false, time.Hour: false, 24 * time.Hour: true, 25 * time.Hour: true} {
+		if err := checkBucketTTL(ttl); (err == nil) != ok {
+			t.Errorf("checkBucketTTL(%s) = %v, want ok=%v", ttl, err, ok)
+		}
+	}
+}

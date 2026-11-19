@@ -187,3 +187,25 @@ func TestEvaluatePropertyMustBeScalar(t *testing.T) {
 		t.Fatal("expected an error for a map-valued property")
 	}
 }
+
+func TestEvaluateGroupID(t *testing.T) {
+	cr := mustCompile(t, analyticsv1alpha1.TrackingRuleSpec{
+		Match:   analyticsv1alpha1.Match{Resource: domainResource, Verbs: []string{"create"}},
+		GroupID: `object.metadata.name`,
+	})
+	e := domainEvent()
+	res, err := cr.Evaluate(e, Activation(e))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.GroupID != "example-com" {
+		t.Fatalf("GroupID = %q, want the expression's value", res.GroupID)
+	}
+
+	cr = mustCompile(t, analyticsv1alpha1.TrackingRuleSpec{
+		Match: analyticsv1alpha1.Match{Resource: domainResource, Verbs: []string{"create"}},
+	})
+	if res, err = cr.Evaluate(e, Activation(e)); err != nil || res.GroupID != "" {
+		t.Fatalf("GroupID = %q, %v, want empty without an expression", res.GroupID, err)
+	}
+}

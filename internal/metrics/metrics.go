@@ -38,13 +38,27 @@ var (
 		Help:      "Audit events a rule failed to evaluate.",
 	}, []string{labelRule})
 
-	// RulesSkipped counts rule evaluations skipped because the rule uses a
-	// limit or call this version does not implement yet.
-	RulesSkipped = prometheus.NewCounterVec(prometheus.CounterOpts{
+	// LimitSuppressed counts calls a once-per-day limit held back.
+	LimitSuppressed = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
-		Name:      "rules_skipped_total",
-		Help:      "Rule evaluations skipped because the rule's limit or call is not supported yet.",
-	}, []string{labelRule, "reason"})
+		Name:      "limit_suppressed_total",
+		Help:      "Calls not sent because the rule already sent for the subject today.",
+	}, []string{labelRule})
+
+	// LimitErrors counts limiter failures. The call is sent anyway.
+	LimitErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Name:      "limit_errors_total",
+		Help:      "Limiter failures; the call is sent anyway and deduplicated by messageId.",
+	}, []string{labelRule})
+
+	// OrgsUnresolved counts project-scoped events whose project is not known
+	// yet, sent without a groupId.
+	OrgsUnresolved = prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: namespace,
+		Name:      "orgs_unresolved_total",
+		Help:      "Project-scoped events sent without a groupId because the project's organization is not known yet.",
+	})
 
 	// Calls counts RudderStack calls by outcome: sent or dropped.
 	Calls = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -84,5 +98,5 @@ var (
 )
 
 func init() {
-	metrics.Registry.MustRegister(Events, RuleMatches, RuleErrors, RulesSkipped, Calls, Flushes, FlushDuration, MessagesNacked, PendingCalls)
+	metrics.Registry.MustRegister(Events, RuleMatches, RuleErrors, LimitSuppressed, LimitErrors, OrgsUnresolved, Calls, Flushes, FlushDuration, MessagesNacked, PendingCalls)
 }
