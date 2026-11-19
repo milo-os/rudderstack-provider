@@ -64,6 +64,8 @@ func main() {
 	var secureMetrics bool
 	var enableHTTP2 bool
 	var tlsOpts []func(*tls.Config)
+	var pipelineOpts pipelineOptions
+	pipelineOpts.bindFlags(flag.CommandLine)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -90,6 +92,11 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	if err := pipelineOpts.validate(); err != nil {
+		setupLog.Error(err, "Invalid pipeline flags")
+		os.Exit(1)
+	}
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -199,6 +206,25 @@ func main() {
 	}
 	// +kubebuilder:scaffold:builder
 
+	ctx := ctrl.SetupSignalHandler()
+
+	store := rules.NewStore(celEnv)
+	if err := store.SetupWithManager(ctx, mgr); err != nil {
+		setupLog.Error(err, "Failed to set up TrackingRule store")
+		os.Exit(1)
+	}
+
+	if pipelineOpts.enabled() {
+		closeNATS, err := setupPipeline(ctx, mgr, &pipelineOpts, store)
+		if err != nil {
+			setupLog.Error(err, "Failed to set up audit event pipeline")
+			os.Exit(1)
+		}
+		defer closeNATS()
+	} else {
+		setupLog.Info("No --nats-url set; running the TrackingRule controller only")
+	}
+
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "Failed to set up health check")
 		os.Exit(1)
@@ -209,8 +235,8 @@ func main() {
 	}
 
 	setupLog.Info("Starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "Failed to run manager")
-		os.Exit(1)
+		os.Exit(1) //nolint:gocritic // the deferred NATS close does not matter on exit
 	}
 }

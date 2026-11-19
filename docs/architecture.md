@@ -67,12 +67,32 @@ and `tenant`. The controller compiles every expression and sets the rule's
 Threshold counts are sets of resource UIDs, not counters: a create adds the
 UID and a delete removes it, so a redelivered message cannot drift the count.
 
+## Components
+
+| Package | Role |
+|---|---|
+| `internal/audit` | Decodes audit events; filters failed, dry-run and incomplete requests |
+| `internal/rules` | Compiles rules, evaluates them, and keeps an informer-fed store on every replica |
+| `internal/pipeline` | JetStream consumer, event processor and batcher |
+| `internal/rudderstack` | `/v1/batch` client and the dry-run sender |
+| `internal/controller` | Sets each rule's Ready condition (leader only) |
+
+The consumer waits for the rule store to sync before it consumes, so events
+are never evaluated against a partial rule set. The pod reports ready once it
+is consuming.
+
 ## Delivery guarantees
 
-- Messages are acknowledged only after RudderStack returns 2xx for the batch
-  that carried them. `429` and `5xx` are nacked with a delay.
-- A batch RudderStack rejects with `4xx` is split; events that still fail go
-  to a dead-letter subject and their messages are acknowledged.
+- Messages are acknowledged only after RudderStack returns 2xx for every call
+  they produced. Network errors, `429` and `5xx` nack the message with a 10s
+  delay.
+- Memory is bounded by the JetStream consumer's `maxAckPending`, since
+  unacked messages are the only thing the batcher holds.
+- At startup the provider refuses to run when the consumer's `ackWait` is
+  shorter than the flush interval plus two send timeouts.
+- A batch RudderStack rejects with `4xx` is split in half repeatedly until
+  the rejected calls are isolated. Those are dropped and counted; a
+  dead-letter subject replaces dropping in phase 4.
 - Every call has a deterministic `messageId`, so RudderStack drops duplicates
   from redelivery:
   - `Every`: the audit ID and rule name.
@@ -106,7 +126,9 @@ UID and a delete removes it, so a redelivered message cannot drift the count.
 
 1. **Done:** the `TrackingRule` CRD, CEL compilation with the Ready
    condition, and the sample rules.
-2. The audit consumer, `Every` rules, the RudderStack sink and dry-run mode.
+2. **Done:** the audit consumer, `Every` rules with `Track` and `Identify`
+   calls, the RudderStack sink and dry-run mode. Rules with other triggers
+   are skipped and counted in `rudderstack_provider_rules_skipped_total`.
 3. NATS KV state: `Once`, `Threshold`, organization resolution, `identify`
    and `group`.
 4. The sweeper (`Inactivity`, `Frequency`), the dead-letter path, dashboards.

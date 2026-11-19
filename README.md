@@ -32,6 +32,24 @@ spec:
 
 The rules for the analytics event list are in [config/samples](config/samples).
 
+## Running
+
+| Flag | Default | Purpose |
+|---|---|---|
+| `--nats-url` | | NATS server. Without it only the TrackingRule controller runs |
+| `--nats-tls-cert`, `--nats-tls-key`, `--nats-tls-ca` | | NATS client TLS |
+| `--nats-stream` | `AUDIT_EVENTS` | Stream carrying audit events |
+| `--nats-consumer` | `rudderstack-provider` | Durable consumer, declared outside the provider |
+| `--rudderstack-data-plane-url` | | RudderStack data plane |
+| `--dry-run` | `false` | Log calls instead of sending them |
+| `--batch-max-calls` | `100` | Calls per request |
+| `--batch-max-bytes` | `4000000` | Request body limit |
+| `--batch-flush-interval` | `5s` | Longest a call waits before it is sent |
+| `--rudderstack-send-timeout` | `30s` | Timeout for one request |
+
+The write key is read from `$RUDDERSTACK_WRITE_KEY`. Metrics are prefixed
+`rudderstack_provider_`.
+
 ## Development
 
 | Command | Purpose |
