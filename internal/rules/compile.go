@@ -20,6 +20,7 @@ const (
 	VarObjectRef = "objectRef"
 	VarObject    = "object"
 	VarTenant    = "tenant"
+	VarActor     = "actor"
 )
 
 // CompiledRule is a TrackingRule with its CEL programs ready to evaluate.
@@ -42,6 +43,7 @@ func NewEnv() (*cel.Env, error) {
 		cel.Variable(VarObjectRef, cel.DynType),
 		cel.Variable(VarObject, cel.DynType),
 		cel.Variable(VarTenant, cel.DynType),
+		cel.Variable(VarActor, cel.DynType),
 	)
 }
 

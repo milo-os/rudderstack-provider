@@ -17,7 +17,7 @@ spec:
     - name: project
       expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
     - name: changeSource
-      expression: 'user.username.startsWith("system:") ? "system" : "human"'
+      expression: 'actor.kind == "user" ? "human" : actor.kind == "serviceaccount" ? "automation" : "system"'
 ---
 apiVersion: analytics.miloapis.com/v1alpha1
 kind: TrackingRule
@@ -38,4 +38,4 @@ spec:
     - name: project
       expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
     - name: changeSource
-      expression: 'user.username.startsWith("system:") ? "system" : "human"'
+      expression: 'actor.kind == "user" ? "human" : actor.kind == "serviceaccount" ? "automation" : "system"'

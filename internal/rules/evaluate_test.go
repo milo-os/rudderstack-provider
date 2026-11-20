@@ -59,7 +59,7 @@ func TestEvaluateMatchesRequest(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			e := domainEvent()
 			tt.mutate(e)
-			res, err := cr.Evaluate(e, Activation(e))
+			res, err := cr.Evaluate(e, Activation(e, ""))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -80,7 +80,7 @@ func TestEvaluateWithoutResourceMatchesAnyResource(t *testing.T) {
 	e := domainEvent()
 	e.Verb = "list"
 	e.ObjectRef = nil
-	res, err := cr.Evaluate(e, Activation(e))
+	res, err := cr.Evaluate(e, Activation(e, ""))
 	if err != nil || res == nil {
 		t.Fatalf("Evaluate() = %v, %v, want a match", res, err)
 	}
@@ -112,7 +112,7 @@ func TestEvaluateConditions(t *testing.T) {
 				Match: analyticsv1alpha1.Match{Resource: domainResource, Verbs: []string{"create"}, Conditions: tt.conditions},
 			})
 			e := domainEvent()
-			res, err := cr.Evaluate(e, Activation(e))
+			res, err := cr.Evaluate(e, Activation(e, ""))
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -132,7 +132,7 @@ func TestEvaluatePropertiesAndUserID(t *testing.T) {
 		},
 	})
 	e := domainEvent()
-	res, err := cr.Evaluate(e, Activation(e))
+	res, err := cr.Evaluate(e, Activation(e, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func TestEvaluateUserID(t *testing.T) {
 			})
 			e := domainEvent()
 			e.User = tt.user
-			res, err := cr.Evaluate(e, Activation(e))
+			res, err := cr.Evaluate(e, Activation(e, ""))
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -183,7 +183,7 @@ func TestEvaluatePropertyMustBeScalar(t *testing.T) {
 		Properties: []analyticsv1alpha1.Property{{Name: "spec", Expression: `object.spec`}},
 	})
 	e := domainEvent()
-	if _, err := cr.Evaluate(e, Activation(e)); err == nil {
+	if _, err := cr.Evaluate(e, Activation(e, "")); err == nil {
 		t.Fatal("expected an error for a map-valued property")
 	}
 }
@@ -194,7 +194,7 @@ func TestEvaluateGroupID(t *testing.T) {
 		GroupID: `object.metadata.name`,
 	})
 	e := domainEvent()
-	res, err := cr.Evaluate(e, Activation(e))
+	res, err := cr.Evaluate(e, Activation(e, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +205,7 @@ func TestEvaluateGroupID(t *testing.T) {
 	cr = mustCompile(t, analyticsv1alpha1.TrackingRuleSpec{
 		Match: analyticsv1alpha1.Match{Resource: domainResource, Verbs: []string{"create"}},
 	})
-	if res, err = cr.Evaluate(e, Activation(e)); err != nil || res.GroupID != "" {
+	if res, err = cr.Evaluate(e, Activation(e, "")); err != nil || res.GroupID != "" {
 		t.Fatalf("GroupID = %q, %v, want empty without an expression", res.GroupID, err)
 	}
 }
