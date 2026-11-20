@@ -56,6 +56,13 @@ func TestClientSend(t *testing.T) {
 	if _, ok := m["traits"]; ok {
 		t.Fatalf("message has empty traits: %v", m)
 	}
+	sentAt, err := time.Parse(time.RFC3339Nano, m["sentAt"].(string))
+	if err != nil {
+		t.Fatalf("sentAt = %v: %v", m["sentAt"], err)
+	}
+	if time.Since(sentAt) > time.Minute {
+		t.Fatalf("sentAt = %v, want the time of sending", sentAt)
+	}
 }
 
 func TestClientSendErrors(t *testing.T) {
@@ -64,8 +71,10 @@ func TestClientSendErrors(t *testing.T) {
 		permanent bool
 	}{
 		{http.StatusBadRequest, true},
-		{http.StatusUnauthorized, true},
 		{http.StatusRequestEntityTooLarge, true},
+		{http.StatusUnauthorized, false},
+		{http.StatusForbidden, false},
+		{http.StatusNotFound, false},
 		{http.StatusTooManyRequests, false},
 		{http.StatusInternalServerError, false},
 		{http.StatusServiceUnavailable, false},
@@ -95,5 +104,18 @@ func TestNetworkErrorIsNotPermanent(t *testing.T) {
 	err := NewClient(srv.URL, "wk", time.Second).Send(context.Background(), []Message{{Type: TypeTrack}})
 	if err == nil || IsPermanent(err) {
 		t.Fatalf("err = %v, want a temporary error", err)
+	}
+}
+
+func TestClientSendDoesNotModifyBatch(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer srv.Close()
+
+	batch := []Message{{Type: TypeTrack, MessageID: "a1/r"}}
+	if err := NewClient(srv.URL, "wk", time.Second).Send(context.Background(), batch); err != nil {
+		t.Fatal(err)
+	}
+	if batch[0].SentAt != nil {
+		t.Fatal("Send set sentAt on the caller's batch; a retry must get a fresh one")
 	}
 }

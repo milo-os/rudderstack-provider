@@ -31,15 +31,19 @@ const (
 
 // Message is one RudderStack call.
 type Message struct {
-	Type              string         `json:"type"`
-	Event             string         `json:"event,omitempty"`
-	UserID            string         `json:"userId"`
-	GroupID           string         `json:"groupId,omitempty"`
-	MessageID         string         `json:"messageId"`
-	OriginalTimestamp time.Time      `json:"originalTimestamp"`
-	Properties        map[string]any `json:"properties,omitempty"`
-	Traits            map[string]any `json:"traits,omitempty"`
-	Context           map[string]any `json:"context,omitempty"`
+	Type              string    `json:"type"`
+	Event             string    `json:"event,omitempty"`
+	UserID            string    `json:"userId"`
+	GroupID           string    `json:"groupId,omitempty"`
+	MessageID         string    `json:"messageId"`
+	OriginalTimestamp time.Time `json:"originalTimestamp"`
+	// SentAt is set by Client.Send. RudderStack derives an event's timestamp
+	// from originalTimestamp corrected by the gap between sentAt and when it
+	// received the call, so late deliveries keep their original time.
+	SentAt     *time.Time     `json:"sentAt,omitempty"`
+	Properties map[string]any `json:"properties,omitempty"`
+	Traits     map[string]any `json:"traits,omitempty"`
+	Context    map[string]any `json:"context,omitempty"`
 }
 
 // Sender delivers a batch of calls. A nil error means RudderStack accepted
@@ -58,15 +62,17 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("rudderstack returned %d: %s", e.StatusCode, e.Body)
 }
 
-// IsPermanent reports whether err is a rejection that retrying the same
-// payload cannot fix: a 4xx other than 429. Network failures, timeouts, 429s
-// and 5xx are temporary.
+// IsPermanent reports whether err rejects the payload itself, so retrying the
+// same calls cannot succeed: 400 Bad Request or 413 Payload Too Large. Every
+// other failure is temporary, including 401, 403 and 404: they mean a wrong
+// write key or data plane URL, which is a configuration fault that must show
+// up as a growing backlog, not as calls dropped one by one.
 func IsPermanent(err error) bool {
 	var re *Error
 	if !errors.As(err, &re) {
 		return false
 	}
-	return re.StatusCode >= 400 && re.StatusCode < 500 && re.StatusCode != http.StatusTooManyRequests
+	return re.StatusCode == http.StatusBadRequest || re.StatusCode == http.StatusRequestEntityTooLarge
 }
 
 // Client sends batches to a RudderStack data plane.
@@ -87,7 +93,13 @@ func NewClient(dataPlaneURL, writeKey string, timeout time.Duration) *Client {
 
 // Send posts batch to /v1/batch.
 func (c *Client) Send(ctx context.Context, batch []Message) error {
-	body, err := json.Marshal(map[string]any{"batch": batch})
+	sentAt := time.Now().UTC()
+	stamped := make([]Message, len(batch))
+	for i, m := range batch {
+		m.SentAt = &sentAt
+		stamped[i] = m
+	}
+	body, err := json.Marshal(map[string]any{"batch": stamped})
 	if err != nil {
 		return err
 	}
