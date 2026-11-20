@@ -197,3 +197,27 @@ func TestBatcherDrainsOnShutdown(t *testing.T) {
 		t.Fatal("pending call was not sent on shutdown")
 	}
 }
+
+func TestBatcherRetriesAuthFailures(t *testing.T) {
+	// A wrong write key or data plane URL rejects every request. Calls must
+	// be redelivered, not split and dropped one by one.
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound} {
+		s := &fakeSender{fail: func([]rudderstack.Message) error {
+			return &rudderstack.Error{StatusCode: status, Body: "no"}
+		}}
+		b := newTestBatcher(s, 10)
+		msgs := []*fakeMsg{{}, {}}
+		b.Submit(msgs[0], []rudderstack.Message{call("1")})
+		b.Submit(msgs[1], []rudderstack.Message{call("2")})
+		b.flush(context.Background(), false)
+
+		if s.requests() != 1 {
+			t.Fatalf("%d: requests = %d, want one request and no splitting", status, s.requests())
+		}
+		for i, m := range msgs {
+			if acked, nacked := m.state(); acked || !nacked {
+				t.Fatalf("%d: message %d acked = %v, nacked = %v, want nacked", status, i, acked, nacked)
+			}
+		}
+	}
+}
