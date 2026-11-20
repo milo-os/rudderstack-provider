@@ -63,6 +63,35 @@ type ResponseStatus struct {
 	Code int `json:"code"`
 }
 
+// Kinds of actor that make requests.
+const (
+	// ActorUser is a person.
+	ActorUser = "user"
+	// ActorServiceAccount is a customer's machine account, such as a CI
+	// pipeline.
+	ActorServiceAccount = "serviceaccount"
+	// ActorSystem is the platform itself: a controller or Kubernetes
+	// service account.
+	ActorSystem = "system"
+)
+
+// ActorKind classifies who made the request. Platform identities have a
+// "system:" username. Customer machine accounts authenticate as an email of
+// the form {name}@{project}.{suffix}, such as
+// ci-a1b2c3@my-project.iam.datumapis.com, so serviceAccountSuffix
+// identifies them; when it is empty they count as users.
+func (e *Event) ActorKind(serviceAccountSuffix string) string {
+	name := e.User.Username
+	switch {
+	case strings.HasPrefix(name, "system:"):
+		return ActorSystem
+	case serviceAccountSuffix != "" && strings.HasSuffix(name, "."+strings.TrimPrefix(serviceAccountSuffix, ".")):
+		return ActorServiceAccount
+	default:
+		return ActorUser
+	}
+}
+
 // Tenant is the scope a request was made in.
 type Tenant struct {
 	Type string `json:"type"`

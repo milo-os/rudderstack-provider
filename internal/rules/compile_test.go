@@ -18,6 +18,7 @@ func TestCompile(t *testing.T) {
 		conditions []analyticsv1alpha1.Condition
 		properties []analyticsv1alpha1.Property
 		userID     string
+		groupID    string
 		wantErr    string
 	}{
 		{
@@ -30,6 +31,11 @@ func TestCompile(t *testing.T) {
 				{Name: "domain", Expression: `objectRef.name`},
 			},
 			userID: `object.metadata.name`,
+		},
+		{
+			name:    "groupId not a string",
+			groupID: `1 + 1`,
+			wantErr: "groupId: must evaluate to string",
 		},
 		{
 			name:    "userId not a string",
@@ -59,6 +65,7 @@ func TestCompile(t *testing.T) {
 			rule.Spec.Match.Conditions = tt.conditions
 			rule.Spec.Properties = tt.properties
 			rule.Spec.UserID = tt.userID
+			rule.Spec.GroupID = tt.groupID
 
 			cr, err := Compile(env, rule)
 			if tt.wantErr == "" {

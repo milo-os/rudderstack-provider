@@ -91,3 +91,28 @@ func TestObject(t *testing.T) {
 		t.Fatal("Object() = nil, want an empty map")
 	}
 }
+
+func TestActorKind(t *testing.T) {
+	const suffix = "iam.datumapis.com"
+	tests := []struct {
+		username string
+		suffix   string
+		want     string
+	}{
+		{"alice@example.com", suffix, ActorUser},
+		{"system:serviceaccount:kube-system:generic-garbage-collector", suffix, ActorSystem},
+		{"system:control@analytics.miloapis.com", suffix, ActorSystem},
+		{"my-service-account-yz2j00@personal-project-efb26a2b.iam.datumapis.com", suffix, ActorServiceAccount},
+		{"my-staging-service-acco-p8emii@project-zdhcz.iam.datumapis.com", suffix, ActorServiceAccount},
+		{"ci-p8emii@project-zdhcz.iam.datumapis.com", "." + suffix, ActorServiceAccount},
+		{"bob@iam.datumapis.com", suffix, ActorUser},
+		{"alice@datumapis.com", suffix, ActorUser},
+		{"ci-p8emii@project-zdhcz.iam.datumapis.com", "", ActorUser},
+	}
+	for _, tt := range tests {
+		e := &Event{User: User{Username: tt.username}}
+		if got := e.ActorKind(tt.suffix); got != tt.want {
+			t.Errorf("ActorKind(%q) with suffix %q = %q, want %q", tt.username, tt.suffix, got, tt.want)
+		}
+	}
+}

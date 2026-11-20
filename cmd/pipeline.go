@@ -12,6 +12,8 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	"go.miloapis.net/rudderstack-provider/internal/limit"
+	"go.miloapis.net/rudderstack-provider/internal/orgs"
 	"go.miloapis.net/rudderstack-provider/internal/pipeline"
 	"go.miloapis.net/rudderstack-provider/internal/rudderstack"
 	"go.miloapis.net/rudderstack-provider/internal/rules"
@@ -29,9 +31,12 @@ type pipelineOptions struct {
 	natsTLSCA    string
 	natsStream   string
 	natsConsumer string
+	natsKVBucket string
 
 	dataPlaneURL string
 	dryRun       bool
+
+	serviceAccountEmailSuffix string
 
 	batch pipeline.BatchConfig
 }
@@ -45,9 +50,14 @@ func (o *pipelineOptions) bindFlags(fs *flag.FlagSet) {
 	fs.StringVar(&o.natsStream, "nats-stream", "AUDIT_EVENTS", "JetStream stream carrying audit events.")
 	fs.StringVar(&o.natsConsumer, "nats-consumer", "rudderstack-provider",
 		"Durable JetStream consumer to read from. It is declared outside the provider.")
+	fs.StringVar(&o.natsKVBucket, "nats-kv-bucket", "rudderstack-provider-limits",
+		"NATS KV bucket for once-per-day limits. It is declared outside the provider, with a TTL of at least 24h.")
 	fs.StringVar(&o.dataPlaneURL, "rudderstack-data-plane-url", "",
 		"RudderStack data plane URL. The write key is read from $"+writeKeyEnv+".")
 	fs.BoolVar(&o.dryRun, "dry-run", false, "Log RudderStack calls instead of sending them.")
+	fs.StringVar(&o.serviceAccountEmailSuffix, "service-account-email-suffix", "",
+		"Domain suffix of customer machine account emails, which rules see as actor.kind \"serviceaccount\". "+
+			"When empty, machine accounts count as users.")
 	fs.IntVar(&o.batch.MaxCalls, "batch-max-calls", 100, "Most calls in one request to RudderStack.")
 	fs.IntVar(&o.batch.MaxBytes, "batch-max-bytes", rudderstack.MaxBatchBytes,
 		"Largest request body sent to RudderStack. Capped at RudderStack's limit.")
@@ -85,6 +95,11 @@ func (o *pipelineOptions) validate() error {
 // setupPipeline connects to NATS and adds the consumer and batcher to mgr.
 // The returned function closes the NATS connection.
 func setupPipeline(ctx context.Context, mgr ctrl.Manager, o *pipelineOptions, store *rules.Store) (func(), error) {
+	resolver := orgs.NewResolver()
+	if err := resolver.SetupWithManager(ctx, mgr); err != nil {
+		return nil, fmt.Errorf("watching projects: %w", err)
+	}
+
 	log := ctrl.Log.WithName("pipeline")
 
 	natsOpts := []nats.Option{nats.Name("rudderstack-provider"), nats.MaxReconnects(-1)}
@@ -119,6 +134,25 @@ func setupPipeline(ctx context.Context, mgr ctrl.Manager, o *pipelineOptions, st
 		return nil, err
 	}
 
+	bucket, err := js.KeyValue(ctx, o.natsKVBucket)
+	if err != nil {
+		nc.Close()
+		return nil, fmt.Errorf("getting KV bucket %s: %w", o.natsKVBucket, err)
+	}
+	status, err := bucket.Status(ctx)
+	if err != nil {
+		nc.Close()
+		return nil, fmt.Errorf("getting status of KV bucket %s: %w", o.natsKVBucket, err)
+	}
+	if err := checkBucketTTL(status.TTL()); err != nil {
+		nc.Close()
+		return nil, err
+	}
+
+	if o.serviceAccountEmailSuffix == "" {
+		log.Info("No --service-account-email-suffix set; customer machine accounts count as users")
+	}
+
 	var sender rudderstack.Sender = rudderstack.NewClient(o.dataPlaneURL, os.Getenv(writeKeyEnv), o.batch.SendTimeout)
 	if o.dryRun {
 		log.Info("Dry run: RudderStack calls are logged, not sent")
@@ -128,9 +162,17 @@ func setupPipeline(ctx context.Context, mgr ctrl.Manager, o *pipelineOptions, st
 	batcher := pipeline.NewBatcher(sender, o.batch, log.WithName("batcher"))
 	consumer := &pipeline.Consumer{
 		JetStream: cons,
-		Processor: &pipeline.Processor{Rules: store, Batcher: batcher, Log: log.WithName("processor")},
-		Synced:    store.HasSynced,
-		Log:       log,
+		Processor: &pipeline.Processor{
+			Rules:   store,
+			Batcher: batcher,
+			Orgs:    resolver,
+			Limiter: limit.NewCached(&limit.KV{Bucket: bucket}),
+			Log:     log.WithName("processor"),
+
+			ServiceAccountEmailSuffix: o.serviceAccountEmailSuffix,
+		},
+		Synced: func() bool { return store.HasSynced() && resolver.HasSynced() },
+		Log:    log,
 	}
 	if err := errors.Join(
 		mgr.Add(batcher),
@@ -141,6 +183,16 @@ func setupPipeline(ctx context.Context, mgr ctrl.Manager, o *pipelineOptions, st
 		return nil, err
 	}
 	return nc.Close, nil
+}
+
+// checkBucketTTL fails when the limits bucket would keep keys forever, or
+// expire them before the day they cover is over.
+func checkBucketTTL(ttl time.Duration) error {
+	if ttl < limit.MinTTL {
+		return fmt.Errorf("KV bucket TTL is %s; it must be at least %s so once-per-day keys last the whole day "+
+			"and are then removed", ttl, limit.MinTTL)
+	}
+	return nil
 }
 
 // checkAckWait fails when JetStream could redeliver a message while it is

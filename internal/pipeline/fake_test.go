@@ -15,6 +15,8 @@ import (
 type fakeMsg struct {
 	jetstream.Msg
 	data []byte
+	// delivered is the delivery count; zero means first delivery.
+	delivered uint64
 
 	mu         sync.Mutex
 	acked      bool
@@ -23,6 +25,10 @@ type fakeMsg struct {
 }
 
 func (m *fakeMsg) Data() []byte { return m.data }
+
+func (m *fakeMsg) Metadata() (*jetstream.MsgMetadata, error) {
+	return &jetstream.MsgMetadata{NumDelivered: max(m.delivered, 1)}, nil
+}
 
 func (m *fakeMsg) Ack() error {
 	m.mu.Lock()
@@ -93,4 +99,27 @@ func (s *fakeSender) requests() int {
 
 func call(id string) rudderstack.Message {
 	return rudderstack.Message{Type: rudderstack.TypeTrack, Event: "E", UserID: "u", MessageID: id}
+}
+
+// fakeLimiter allows each key once, or fails every call when err is set.
+type fakeLimiter struct {
+	mu   sync.Mutex
+	seen map[string]bool
+	err  error
+}
+
+func (l *fakeLimiter) Allow(_ context.Context, key string) (bool, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.err != nil {
+		return false, l.err
+	}
+	if l.seen == nil {
+		l.seen = map[string]bool{}
+	}
+	if l.seen[key] {
+		return false, nil
+	}
+	l.seen[key] = true
+	return true, nil
 }

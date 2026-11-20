@@ -88,6 +88,14 @@ type TrackingRuleSpec struct {
 	// +optional
 	UserID string `json:"userId,omitempty"`
 
+	// GroupID is a CEL expression for the RudderStack groupId, over the same
+	// variables as conditions. Defaults to the organization the request was
+	// made in, resolved from its project when the request is project-scoped.
+	// Set it when the event is about an organization other than the request's
+	// scope, such as an Organization being created.
+	// +optional
+	GroupID string `json:"groupId,omitempty"`
+
 	// Limit caps how often the rule sends. When unset, every matching event
 	// is sent.
 	// +optional

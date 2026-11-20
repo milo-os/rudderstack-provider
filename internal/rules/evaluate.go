@@ -14,13 +14,17 @@ import (
 type Result struct {
 	// UserID is the RudderStack userId for the call.
 	UserID string
+	// GroupID is the rule's groupId expression result, or empty when the rule
+	// uses the request's organization.
+	GroupID string
 	// Properties are the rule's evaluated properties.
 	Properties map[string]any
 }
 
 // Activation builds the CEL variables for an event. It is built once per
-// event and shared by every rule.
-func Activation(e *audit.Event) map[string]any {
+// event and shared by every rule. serviceAccountSuffix identifies customer
+// machine accounts for actor.kind.
+func Activation(e *audit.Event, serviceAccountSuffix string) map[string]any {
 	user := map[string]any{
 		"username": e.User.Username,
 		"uid":      e.User.UID,
@@ -47,6 +51,7 @@ func Activation(e *audit.Event) map[string]any {
 		VarObjectRef: objectRef,
 		VarObject:    e.Object(),
 		VarTenant:    map[string]any{"type": tenant.Type, "name": tenant.Name},
+		VarActor:     map[string]any{"kind": e.ActorKind(serviceAccountSuffix)},
 	}
 }
 
@@ -74,6 +79,11 @@ func (cr *CompiledRule) Evaluate(e *audit.Event, vars map[string]any) (*Result, 
 	res.UserID, err = cr.userID(e, vars)
 	if err != nil {
 		return nil, err
+	}
+	if cr.GroupID != nil {
+		if res.GroupID, err = evalString(cr.GroupID, vars); err != nil {
+			return nil, fmt.Errorf("groupId: %w", err)
+		}
 	}
 	return res, nil
 }
@@ -114,13 +124,9 @@ func (cr *CompiledRule) matchesConditions(vars map[string]any) (bool, error) {
 
 func (cr *CompiledRule) userID(e *audit.Event, vars map[string]any) (string, error) {
 	if cr.UserID != nil {
-		v, err := evalScalar(cr.UserID, vars)
+		s, err := evalString(cr.UserID, vars)
 		if err != nil {
 			return "", fmt.Errorf("userId: %w", err)
-		}
-		s, ok := v.(string)
-		if !ok || s == "" {
-			return "", errors.New("userId: did not evaluate to a non-empty string")
 		}
 		return s, nil
 	}
@@ -131,6 +137,19 @@ func (cr *CompiledRule) userID(e *audit.Event, vars map[string]any) (string, err
 		return e.User.Username, nil
 	}
 	return "", errors.New("event has no user uid or username")
+}
+
+// evalString evaluates prg and requires a non-empty string.
+func evalString(prg cel.Program, vars map[string]any) (string, error) {
+	v, err := evalScalar(prg, vars)
+	if err != nil {
+		return "", err
+	}
+	s, ok := v.(string)
+	if !ok || s == "" {
+		return "", errors.New("did not evaluate to a non-empty string")
+	}
+	return s, nil
 }
 
 // evalScalar evaluates prg and requires a string, number or boolean, the

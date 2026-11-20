@@ -1,0 +1,23 @@
+# Organization traits. The request that creates or updates an organization is
+# not made inside it, so groupId comes from the object.
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: organization-traits
+spec:
+  event: Organization
+  call: Group
+  subject: Organization
+  groupId: object.metadata.name
+  match:
+    resource:
+      group: resourcemanager.miloapis.com
+      resource: organizations
+    verbs: [create, update, patch]
+  properties:
+    - name: name
+      expression: object.metadata.name
+    - name: displayName
+      expression: >-
+        has(object.metadata.annotations) && "kubernetes.io/display-name" in object.metadata.annotations
+        ? object.metadata.annotations["kubernetes.io/display-name"] : object.metadata.name

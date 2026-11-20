@@ -10,6 +10,7 @@
 ## be matched to its add whoever made it.
 resources:
 - users.yaml
+- organizations.yaml
 - projects.yaml
 - domains.yaml
 - proxies.yaml
