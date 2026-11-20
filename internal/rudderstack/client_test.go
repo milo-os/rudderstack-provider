@@ -114,26 +114,54 @@ func TestDryRunSenderLogsNoValues(t *testing.T) {
 	var lines []string
 	log := funcr.New(func(prefix, args string) { lines = append(lines, args) }, funcr.Options{})
 
-	err := DryRunSender{Log: log}.Send(context.Background(), []Message{{
-		Type:      TypeIdentify,
-		UserID:    "u1",
-		MessageID: "a1/user-identify",
-		Traits:    map[string]any{"email": "alice@example.com"},
-		Context:   map[string]any{"groupId": "acme"},
-	}})
+	err := DryRunSender{Log: log}.Send(context.Background(), []Message{
+		{
+			Type:       TypeIdentify,
+			UserID:     "alice@example.com",
+			MessageID:  "a1/user-identify",
+			Traits:     map[string]any{"email": "alice@example.com", "name": "Alice Example"},
+			Properties: map[string]any{"project": "secret-project"},
+			Context:    map[string]any{"groupId": "acme"},
+		},
+		{
+			Type:      TypeGroup,
+			UserID:    "u1",
+			GroupID:   "acme",
+			MessageID: "a2/organization-group",
+			Traits:    map[string]any{"name": "acme", "displayName": "Acme Widgets Ltd"},
+		},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(lines) != 1 {
-		t.Fatalf("logged %d lines, want 1", len(lines))
+	if len(lines) != 2 {
+		t.Fatalf("logged %d lines, want 2", len(lines))
 	}
-	line := lines[0]
-	if strings.Contains(line, "alice@example.com") {
-		t.Fatalf("dry run logged a trait value: %s", line)
+	checks := []struct {
+		line          string
+		want, notWant []string
+	}{
+		{
+			line:    lines[0],
+			want:    []string{`"email"`, `"name"`, `"project"`, `"acme"`, `"a1/user-identify"`, hashID("alice@example.com"), `"bytes"`},
+			notWant: []string{"alice@example.com", "Alice Example", "secret-project"},
+		},
+		{
+			line:    lines[1],
+			want:    []string{`"displayName"`, `"name"`, `"acme"`, `"a2/organization-group"`, hashID("u1")},
+			notWant: []string{"Acme Widgets Ltd", `"u1"`},
+		},
 	}
-	for _, want := range []string{`"email"`, `"u1"`, `"acme"`, `"a1/user-identify"`} {
-		if !strings.Contains(line, want) {
-			t.Fatalf("dry run log %s does not mention %s", line, want)
+	for _, c := range checks {
+		for _, v := range c.notWant {
+			if strings.Contains(c.line, v) {
+				t.Errorf("dry run logged the value %q: %s", v, c.line)
+			}
+		}
+		for _, v := range c.want {
+			if !strings.Contains(c.line, v) {
+				t.Errorf("dry run log %s does not mention %s", c.line, v)
+			}
 		}
 	}
 }

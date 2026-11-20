@@ -294,8 +294,10 @@ other milo-os providers:
 The manager's settings are env vars the deployment overlay can patch.
 `DRY_RUN` defaults to `true`, and with no `NATS_URL` only the controller
 runs, so an overlay opts in to consuming and then to sending. In dry-run the
-provider logs each call's type, event, IDs and property names, never property
-or trait values, which can hold email addresses. The overlay supplies:
+provider logs each call's type, event, IDs, property and trait names and size,
+never property or trait values, which can hold email addresses. The `userId`
+is logged only as a hash, because it can be an email address. The overlay
+supplies:
 
 - the Milo kubeconfig, client certificate and CA bundle (see
   `milo-integration`). The certificate needs only `controller_rbac` bound to
@@ -316,8 +318,8 @@ verify them. No webhook server runs and no certificate is generated.
 
 - The JetStream consumer starts with `deliverPolicy: new` so history is not
   replayed into analytics.
-- `--dry-run` logs payloads instead of sending them; staging runs this way
-  first.
+- `--dry-run` logs each call's shape instead of sending it; staging runs this
+  way first.
 
 ## Phases
 

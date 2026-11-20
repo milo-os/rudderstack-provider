@@ -57,6 +57,12 @@ The rules for the analytics event list are in [config/rules](config/rules).
 The write key is read from `$RUDDERSTACK_WRITE_KEY`. Metrics are prefixed
 `rudderstack_provider_`.
 
+In dry run, each call is logged instead of sent. The log line holds the call's
+type, event, `messageId`, `groupId`, timestamp, the names of its properties and
+traits, and its size in bytes. It never holds property or trait values, such as
+emails or organization display names. The `userId` is logged only as a short
+SHA-256 hash, because it can be a username, which is often an email address.
+
 The deployment bundle, and what an environment has to supply, is described in
 [docs/architecture.md](docs/architecture.md#deployment).
 

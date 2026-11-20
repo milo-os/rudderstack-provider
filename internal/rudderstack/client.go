@@ -4,6 +4,8 @@ package rudderstack
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -130,7 +132,9 @@ func (c *Client) Send(ctx context.Context, batch []Message) error {
 
 // DryRunSender logs each call instead of sending it. It logs the call's shape
 // and IDs but never property or trait values, which can hold personal data
-// such as email addresses that must not end up in cluster logs.
+// such as email addresses that must not end up in cluster logs. The userId is
+// logged as a hash because it falls back to the username, which can be an
+// email address.
 type DryRunSender struct {
 	Log logr.Logger
 }
@@ -138,18 +142,33 @@ type DryRunSender struct {
 // Send logs batch and reports success.
 func (d DryRunSender) Send(_ context.Context, batch []Message) error {
 	for _, m := range batch {
+		size := -1
+		if b, err := json.Marshal(m); err == nil {
+			size = len(b)
+		}
 		d.Log.Info("Dry run: would send RudderStack call",
 			"type", m.Type,
 			"event", m.Event,
 			"messageId", m.MessageID,
-			"userId", m.UserID,
+			"userIdHash", hashID(m.UserID),
 			"groupId", groupID(m),
 			"originalTimestamp", m.OriginalTimestamp,
 			"properties", slices.Sorted(maps.Keys(m.Properties)),
 			"traits", slices.Sorted(maps.Keys(m.Traits)),
+			"bytes", size,
 		)
 	}
 	return nil
+}
+
+// hashID returns a short, stable hash of id so log lines can be correlated
+// without revealing it.
+func hashID(id string) string {
+	if id == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(id))
+	return hex.EncodeToString(sum[:6])
 }
 
 func groupID(m Message) string {
