@@ -93,7 +93,7 @@ var _ = Describe("TrackingRule Controller", func() {
 	})
 
 	It("accepts every sample rule and marks it Ready", func() {
-		files, err := filepath.Glob(filepath.Join("..", "..", "config", "samples", "*.yaml"))
+		files, err := filepath.Glob(filepath.Join("..", "..", "config", "rules", "*.yaml"))
 		Expect(err).NotTo(HaveOccurred())
 
 		var count int

@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -74,8 +75,9 @@ func (o *pipelineOptions) validate() error {
 		return nil
 	}
 	var errs []error
-	if !o.dryRun && o.dataPlaneURL == "" {
-		errs = append(errs, errors.New("--rudderstack-data-plane-url is required unless --dry-run is set"))
+	if !o.dryRun && !strings.HasPrefix(o.dataPlaneURL, "https://") {
+		// The write key is sent with every request.
+		errs = append(errs, errors.New("--rudderstack-data-plane-url must be an https:// URL unless --dry-run is set"))
 	}
 	if !o.dryRun && os.Getenv(writeKeyEnv) == "" {
 		errs = append(errs, fmt.Errorf("$%s is required unless --dry-run is set", writeKeyEnv))

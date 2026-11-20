@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# What `make deploy` applies to a development cluster: the base plus its
+# namespace, which deployments otherwise create themselves.
+resources:
+  - ../base
+
+components:
+  - ../components/namespace

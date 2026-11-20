@@ -25,8 +25,14 @@ type Limiter interface {
 // hashed because user IDs can hold characters NATS keys do not allow, such as
 // "@" and ":".
 func DailyKey(rule, subject string, day time.Time) string {
+	return rule + "." + day.UTC().Format("20060102") + "." + SubjectHash(subject)
+}
+
+// SubjectHash is a stable stand-in for a subject in keys and IDs. User IDs can
+// be email addresses, which must not appear where keys and IDs are logged.
+func SubjectHash(subject string) string {
 	sum := sha256.Sum256([]byte(subject))
-	return rule + "." + day.UTC().Format("20060102") + "." + hex.EncodeToString(sum[:12])
+	return hex.EncodeToString(sum[:12])
 }
 
 // maxCachedKeys bounds Cached's memory. Keys hold the day they cover, so

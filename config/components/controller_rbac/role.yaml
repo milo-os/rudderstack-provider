@@ -1,0 +1,30 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rudderstack-provider
+rules:
+- apiGroups:
+  - analytics.miloapis.com
+  resources:
+  - trackingrules
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - analytics.miloapis.com
+  resources:
+  - trackingrules/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - resourcemanager.miloapis.com
+  resources:
+  - projects
+  verbs:
+  - get
+  - list
+  - watch

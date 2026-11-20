@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Points the manager at a Milo control plane: every TrackingRule, Project and
+# leader-election Lease is read from Milo through a mounted kubeconfig. The
+# pod's own ServiceAccount token is then unused, so it is not mounted.
+#
+# Environment-specific wiring is left to the deployment overlay, which must
+# mount:
+#
+#   - the kubeconfig at /etc/kubernetes/project-discovery/auth/kubeconfig.yaml
+#   - the client certificate it authenticates with
+#   - the CA bundle it verifies Milo's serving certificate against
+patches:
+  - target:
+      kind: Deployment
+      name: rudderstack-provider
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: rudderstack-provider
+      spec:
+        template:
+          spec:
+            automountServiceAccountToken: false
+            containers:
+              - name: manager
+                env:
+                  - name: KUBECONFIG
+                    value: /etc/kubernetes/project-discovery/auth/kubeconfig.yaml
+                  - name: LEADER_ELECT_NAMESPACE
+                    value: milo-system

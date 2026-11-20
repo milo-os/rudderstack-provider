@@ -3,8 +3,8 @@
 Sends product analytics to [RudderStack] from Milo platform activity. The
 provider consumes Kubernetes audit events from NATS JetStream, evaluates them
 against `TrackingRule` resources, and sends `track`, `identify` and `group`
-calls. Milestones are computed downstream in BigQuery by RudderStack
-Profiles. It shares its design with [search].
+calls. Milestones are computed downstream by scheduled queries in BigQuery.
+It shares its design with [search].
 
 See [docs/architecture.md](docs/architecture.md) for the design.
 
@@ -33,9 +33,9 @@ spec:
 ```
 
 Milestones such as "first domain" or "more than 3 domains" are computed from
-these events in BigQuery by RudderStack Profiles, not by the provider.
+these events by scheduled queries in BigQuery, not by the provider.
 
-The rules for the analytics event list are in [config/samples](config/samples).
+The rules for the analytics event list are in [config/rules](config/rules).
 
 ## Running
 
@@ -56,6 +56,15 @@ The rules for the analytics event list are in [config/samples](config/samples).
 
 The write key is read from `$RUDDERSTACK_WRITE_KEY`. Metrics are prefixed
 `rudderstack_provider_`.
+
+In dry run, each call is logged instead of sent. The log line holds the call's
+type, event, `messageId`, `groupId`, timestamp, the names of its properties and
+traits, and its size in bytes. It never holds property or trait values, such as
+emails or organization display names. The `userId` is logged only as a short
+SHA-256 hash, because it can be a username, which is often an email address.
+
+The deployment bundle, and what an environment has to supply, is described in
+[docs/architecture.md](docs/architecture.md#deployment).
 
 ## Development
 
