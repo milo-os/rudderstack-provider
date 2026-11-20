@@ -1,0 +1,41 @@
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: domain-added
+spec:
+  event: Domain Added
+  match:
+    resource:
+      group: networking.datumapis.com
+      resource: domains
+    verbs: [create]
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'user.username.startsWith("system:") ? "system" : "human"'
+---
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: domain-removed
+spec:
+  event: Domain Removed
+  match:
+    resource:
+      group: networking.datumapis.com
+      resource: domains
+    verbs: [delete]
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'user.username.startsWith("system:") ? "system" : "human"'

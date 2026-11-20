@@ -1,0 +1,278 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: trackingrules.analytics.miloapis.com
+spec:
+  group: analytics.miloapis.com
+  names:
+    kind: TrackingRule
+    listKind: TrackingRuleList
+    plural: trackingrules
+    singular: trackingrule
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.event
+      name: Event
+      type: string
+    - jsonPath: .spec.limit
+      name: Limit
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: TrackingRule maps platform audit events to RudderStack analytics
+          calls.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of TrackingRule
+            properties:
+              call:
+                default: Track
+                description: Call is the RudderStack call to make.
+                enum:
+                - Track
+                - Identify
+                - Group
+                type: string
+              event:
+                description: |-
+                  Event is the RudderStack event name, for example "Domain Added". Use
+                  Object + Action naming. Ignored for Identify and Group calls.
+                maxLength: 128
+                minLength: 1
+                type: string
+              limit:
+                description: |-
+                  Limit caps how often the rule sends. When unset, every matching event
+                  is sent.
+                enum:
+                - OncePerDay
+                type: string
+              match:
+                description: Match selects the audit events this rule applies to.
+                properties:
+                  conditions:
+                    description: |-
+                      Conditions filter matching events using CEL expressions, evaluated with
+                      OR semantics. Each must evaluate to a boolean. The audit event is
+                      available as:
+                        - verb: the audit verb
+                        - user: the authenticated user (username, uid, groups, extra)
+                        - userAgent: the client user agent, e.g. "datumctl/v0.12.0"
+                        - objectRef: the target (apiGroup, resource, namespace, name, uid)
+                        - object: the response object, or the request object when the
+                          response does not carry it
+                        - tenant: the scope of the request (type, name)
+                    items:
+                      description: Condition is a named CEL condition.
+                      properties:
+                        expression:
+                          description: Expression is a CEL expression that must evaluate
+                            to a boolean.
+                          minLength: 1
+                          type: string
+                        name:
+                          description: Name identifies the condition in status and
+                            logs.
+                          maxLength: 256
+                          minLength: 1
+                          type: string
+                      required:
+                      - expression
+                      - name
+                      type: object
+                    maxItems: 10
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                  resource:
+                    description: |-
+                      Resource limits the rule to one resource type. When unset, every
+                      resource matches, which suits user-level rules such as datumctl access.
+                    properties:
+                      group:
+                        description: Group is the API group. Empty for the core group.
+                        type: string
+                      resource:
+                        description: |-
+                          Resource is the plural resource name, for example "domains". Audit
+                          events name the resource this way for every verb, including deletes
+                          whose response carries no kind.
+                        minLength: 1
+                        type: string
+                    required:
+                    - resource
+                    type: object
+                  verbs:
+                    description: Verbs are the audit verbs to match, for example create
+                      or delete.
+                    items:
+                      enum:
+                      - create
+                      - update
+                      - patch
+                      - delete
+                      - get
+                      - list
+                      - watch
+                      type: string
+                    minItems: 1
+                    type: array
+                    x-kubernetes-list-type: set
+                required:
+                - verbs
+                type: object
+              properties:
+                description: |-
+                  Properties are sent with the call (as traits for Identify and Group).
+                  Only fields listed here leave the platform.
+                items:
+                  description: Property is a named value sent with the call.
+                  properties:
+                    expression:
+                      description: |-
+                        Expression is a CEL expression over the same variables as conditions.
+                        It must evaluate to a string, number or boolean.
+                      minLength: 1
+                      type: string
+                    name:
+                      description: Name is the property name in RudderStack.
+                      maxLength: 128
+                      minLength: 1
+                      type: string
+                  required:
+                  - expression
+                  - name
+                  type: object
+                maxItems: 20
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+              subject:
+                default: User
+                description: |-
+                  Subject is who the event is about: the acting user, or the organization
+                  that owns the resource. Once-per-day limits are counted per subject.
+                enum:
+                - User
+                - Organization
+                type: string
+              userId:
+                description: |-
+                  UserID is a CEL expression for the RudderStack userId, over the same
+                  variables as conditions. Defaults to the acting user's uid. Set it when
+                  the event is about a user other than the one making the request, such as
+                  a User object created by the sign-up flow.
+                type: string
+            required:
+            - event
+            - match
+            type: object
+          status:
+            description: status defines the observed state of TrackingRule
+            properties:
+              conditions:
+                description: |-
+                  Conditions report whether the rule's CEL compiled and the rule is
+                  active. The Ready condition is False with reason InvalidExpression when
+                  any expression fails to compile.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              observedGeneration:
+                description: ObservedGeneration is the generation the conditions were
+                  computed for.
+                format: int64
+                type: integer
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

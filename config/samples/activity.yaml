@@ -1,0 +1,27 @@
+# Daily activity signals. Profiles derives "first datumctl access",
+# "frequent datumctl user" and inactivity from these.
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: datumctl-used
+spec:
+  event: datumctl Used
+  limit: OncePerDay
+  match:
+    verbs: [get, list, watch, create, update, patch, delete]
+    conditions:
+      - name: datumctl
+        expression: userAgent.startsWith("datumctl/")
+---
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: user-active
+spec:
+  event: Active
+  limit: OncePerDay
+  match:
+    verbs: [get, list, watch, create, update, patch, delete]
+    conditions:
+      - name: human
+        expression: '!user.username.startsWith("system:")'

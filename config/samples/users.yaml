@@ -1,0 +1,31 @@
+# The sign-up flow creates the User, so the request is made by a system
+# account. userId points at the new User instead of the acting user.
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: user-signed-up
+spec:
+  event: Signed Up
+  userId: object.metadata.name
+  match:
+    resource:
+      group: iam.miloapis.com
+      resource: users
+    verbs: [create]
+---
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: user-identify
+spec:
+  event: Identify
+  call: Identify
+  userId: object.metadata.name
+  match:
+    resource:
+      group: iam.miloapis.com
+      resource: users
+    verbs: [create]
+  properties:
+    - name: email
+      expression: object.spec.email

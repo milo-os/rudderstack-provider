@@ -1,0 +1,41 @@
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: workload-added
+spec:
+  event: Workload Deployed
+  match:
+    resource:
+      group: compute.datumapis.com
+      resource: workloads
+    verbs: [create]
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'user.username.startsWith("system:") ? "system" : "human"'
+---
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: workload-removed
+spec:
+  event: Workload Removed
+  match:
+    resource:
+      group: compute.datumapis.com
+      resource: workloads
+    verbs: [delete]
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'user.username.startsWith("system:") ? "system" : "human"'

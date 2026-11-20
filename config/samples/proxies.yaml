@@ -1,0 +1,41 @@
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: proxy-added
+spec:
+  event: Proxy Added
+  match:
+    resource:
+      group: networking.datumapis.com
+      resource: httpproxies
+    verbs: [create]
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'user.username.startsWith("system:") ? "system" : "human"'
+---
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: proxy-removed
+spec:
+  event: Proxy Removed
+  match:
+    resource:
+      group: networking.datumapis.com
+      resource: httpproxies
+    verbs: [delete]
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'user.username.startsWith("system:") ? "system" : "human"'

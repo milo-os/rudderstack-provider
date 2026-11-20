@@ -1,0 +1,43 @@
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: contributor-added
+spec:
+  event: Contributor Added
+  subject: Organization
+  match:
+    resource:
+      group: resourcemanager.miloapis.com
+      resource: organizationmemberships
+    verbs: [create]
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'user.username.startsWith("system:") ? "system" : "human"'
+---
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: contributor-removed
+spec:
+  event: Contributor Removed
+  subject: Organization
+  match:
+    resource:
+      group: resourcemanager.miloapis.com
+      resource: organizationmemberships
+    verbs: [delete]
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'user.username.startsWith("system:") ? "system" : "human"'
