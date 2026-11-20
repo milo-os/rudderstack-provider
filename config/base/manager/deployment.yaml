@@ -62,6 +62,7 @@ spec:
             - --nats-kv-bucket=$(NATS_KV_BUCKET)
             - --rudderstack-data-plane-url=$(RUDDERSTACK_DATA_PLANE_URL)
             - --dry-run=$(DRY_RUN)
+            - --service-account-email-suffix=$(SERVICE_ACCOUNT_EMAIL_SUFFIX)
           env:
             - name: LEADER_ELECT
               value: "true"
@@ -92,6 +93,10 @@ spec:
             # false and provides the write key.
             - name: DRY_RUN
               value: "true"
+            # Domain suffix of customer machine account emails, so rules can
+            # tell them from people. Empty counts them as people.
+            - name: SERVICE_ACCOUNT_EMAIL_SUFFIX
+              value: ""
             - name: RUDDERSTACK_WRITE_KEY
               valueFrom:
                 secretKeyRef:

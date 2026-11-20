@@ -301,6 +301,8 @@ or trait values, which can hold email addresses. The overlay supplies:
   `system:masters`: the pod holds an external write key and calls out to
   RudderStack.
 - `NATS_URL` and the NATS client certificate (`NATS_TLS_*`)
+- `SERVICE_ACCOUNT_EMAIL_SUFFIX`, so customer machine accounts are not
+  counted as people
 - `RUDDERSTACK_DATA_PLANE_URL` (must be `https://`), `DRY_RUN=false`, and a
   Secret named `rudderstack-provider-write-key` with key `writeKey`
 
