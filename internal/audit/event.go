@@ -77,7 +77,8 @@ const (
 
 // ActorKind classifies who made the request. Platform identities have a
 // "system:" username. Customer machine accounts authenticate as an email of
-// the form {name}@{namespace}.{project}.{suffix}, so serviceAccountSuffix
+// the form {name}@{project}.{suffix}, such as
+// ci-a1b2c3@my-project.iam.datumapis.com, so serviceAccountSuffix
 // identifies them; when it is empty they count as users.
 func (e *Event) ActorKind(serviceAccountSuffix string) string {
 	name := e.User.Username

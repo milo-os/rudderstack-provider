@@ -85,8 +85,10 @@ agrees:
 - `system`: a `system:` username, meaning a platform controller or
   Kubernetes service account.
 - `serviceaccount`: a customer machine account, such as a CI pipeline. These
-  authenticate as `{name}@{namespace}.{project}.{suffix}`, matched by
-  `--service-account-email-suffix`. Without the flag they count as users.
+  authenticate as `{name}@{project}.{suffix}`, for example
+  `ci-a1b2c3@my-project.iam.datumapis.com`, matched by
+  `--service-account-email-suffix` (`iam.datumapis.com` in staging and
+  production). Without the flag they count as users.
 - `user`: a person.
 
 ### Event catalog

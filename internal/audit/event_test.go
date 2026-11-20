@@ -93,7 +93,7 @@ func TestObject(t *testing.T) {
 }
 
 func TestActorKind(t *testing.T) {
-	const suffix = "iam.example.com"
+	const suffix = "iam.datumapis.com"
 	tests := []struct {
 		username string
 		suffix   string
@@ -102,10 +102,12 @@ func TestActorKind(t *testing.T) {
 		{"alice@example.com", suffix, ActorUser},
 		{"system:serviceaccount:kube-system:generic-garbage-collector", suffix, ActorSystem},
 		{"system:control@analytics.miloapis.com", suffix, ActorSystem},
-		{"ci@default.p1.iam.example.com", suffix, ActorServiceAccount},
-		{"ci@default.p1.iam.example.com", "." + suffix, ActorServiceAccount},
-		{"bob@iam.example.com", suffix, ActorUser},
-		{"ci@default.p1.iam.example.com", "", ActorUser},
+		{"my-service-account-yz2j00@personal-project-efb26a2b.iam.datumapis.com", suffix, ActorServiceAccount},
+		{"my-staging-service-acco-p8emii@project-zdhcz.iam.datumapis.com", suffix, ActorServiceAccount},
+		{"ci-p8emii@project-zdhcz.iam.datumapis.com", "." + suffix, ActorServiceAccount},
+		{"bob@iam.datumapis.com", suffix, ActorUser},
+		{"alice@datumapis.com", suffix, ActorUser},
+		{"ci-p8emii@project-zdhcz.iam.datumapis.com", "", ActorUser},
 	}
 	for _, tt := range tests {
 		e := &Event{User: User{Username: tt.username}}

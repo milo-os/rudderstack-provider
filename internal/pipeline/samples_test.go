@@ -180,8 +180,8 @@ func TestSampleOrganizationTraits(t *testing.T) {
 func TestSampleMachineAccountIsNotAUser(t *testing.T) {
 	// A customer's CI pipeline running datumctl as a machine account.
 	p, sub := sampleProcessor(t)
-	p.ServiceAccountEmailSuffix = "iam.example.com"
-	ci := map[string]any{"username": "ci@default.p1.iam.example.com", "uid": "sa-1"}
+	p.ServiceAccountEmailSuffix = "iam.datumapis.com"
+	ci := map[string]any{"username": "ci-p8emii@project-zdhcz.iam.datumapis.com", "uid": "sa-1"}
 
 	p.Handle(auditMsg(t, map[string]any{"verb": "list", "objectRef": nil, "user": ci}))
 	if got := events(sub); len(got) != 0 {
