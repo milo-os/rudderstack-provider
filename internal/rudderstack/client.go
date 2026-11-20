@@ -8,7 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -114,7 +116,9 @@ func (c *Client) Send(ctx context.Context, batch []Message) error {
 	return &Error{StatusCode: resp.StatusCode, Body: strings.TrimSpace(string(msg))}
 }
 
-// DryRunSender logs each call instead of sending it.
+// DryRunSender logs each call instead of sending it. It logs the call's shape
+// and IDs but never property or trait values, which can hold personal data
+// such as email addresses that must not end up in cluster logs.
 type DryRunSender struct {
 	Log logr.Logger
 }
@@ -122,11 +126,24 @@ type DryRunSender struct {
 // Send logs batch and reports success.
 func (d DryRunSender) Send(_ context.Context, batch []Message) error {
 	for _, m := range batch {
-		payload, err := json.Marshal(m)
-		if err != nil {
-			return err
-		}
-		d.Log.Info("Dry run: would send RudderStack call", "type", m.Type, "event", m.Event, "payload", string(payload))
+		d.Log.Info("Dry run: would send RudderStack call",
+			"type", m.Type,
+			"event", m.Event,
+			"messageId", m.MessageID,
+			"userId", m.UserID,
+			"groupId", groupID(m),
+			"originalTimestamp", m.OriginalTimestamp,
+			"properties", slices.Sorted(maps.Keys(m.Properties)),
+			"traits", slices.Sorted(maps.Keys(m.Traits)),
+		)
 	}
 	return nil
+}
+
+func groupID(m Message) string {
+	if m.GroupID != "" {
+		return m.GroupID
+	}
+	g, _ := m.Context["groupId"].(string)
+	return g
 }

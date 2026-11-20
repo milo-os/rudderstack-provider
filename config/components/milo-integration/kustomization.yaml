@@ -2,7 +2,8 @@ apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 
 # Points the manager at a Milo control plane: every TrackingRule, Project and
-# leader-election Lease is read from Milo through a mounted kubeconfig.
+# leader-election Lease is read from Milo through a mounted kubeconfig. The
+# pod's own ServiceAccount token is then unused, so it is not mounted.
 #
 # Environment-specific wiring is left to the deployment overlay, which must
 # mount:
@@ -22,6 +23,7 @@ patches:
       spec:
         template:
           spec:
+            automountServiceAccountToken: false
             containers:
               - name: manager
                 env:

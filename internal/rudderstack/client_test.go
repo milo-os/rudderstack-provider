@@ -6,8 +6,11 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/go-logr/logr/funcr"
 )
 
 func TestClientSend(t *testing.T) {
@@ -95,5 +98,33 @@ func TestNetworkErrorIsNotPermanent(t *testing.T) {
 	err := NewClient(srv.URL, "wk", time.Second).Send(context.Background(), []Message{{Type: TypeTrack}})
 	if err == nil || IsPermanent(err) {
 		t.Fatalf("err = %v, want a temporary error", err)
+	}
+}
+
+func TestDryRunSenderLogsNoValues(t *testing.T) {
+	var lines []string
+	log := funcr.New(func(prefix, args string) { lines = append(lines, args) }, funcr.Options{})
+
+	err := DryRunSender{Log: log}.Send(context.Background(), []Message{{
+		Type:      TypeIdentify,
+		UserID:    "u1",
+		MessageID: "a1/user-identify",
+		Traits:    map[string]any{"email": "alice@example.com"},
+		Context:   map[string]any{"groupId": "acme"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 1 {
+		t.Fatalf("logged %d lines, want 1", len(lines))
+	}
+	line := lines[0]
+	if strings.Contains(line, "alice@example.com") {
+		t.Fatalf("dry run logged a trait value: %s", line)
+	}
+	for _, want := range []string{`"email"`, `"u1"`, `"acme"`, `"a1/user-identify"`} {
+		if !strings.Contains(line, want) {
+			t.Fatalf("dry run log %s does not mention %s", line, want)
+		}
 	}
 }

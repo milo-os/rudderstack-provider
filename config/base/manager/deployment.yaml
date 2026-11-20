@@ -52,9 +52,7 @@ spec:
             - --leader-elect=$(LEADER_ELECT)
             - --leader-elect-namespace=$(LEADER_ELECT_NAMESPACE)
             - --metrics-bind-address=$(METRICS_BIND_ADDRESS)
-            - --metrics-secure=false
             - --health-probe-bind-address=$(HEALTH_PROBE_BIND_ADDRESS)
-            - --zap-devel=false
             - --nats-url=$(NATS_URL)
             - --nats-tls-cert=$(NATS_TLS_CERT)
             - --nats-tls-key=$(NATS_TLS_KEY)
@@ -100,10 +98,9 @@ spec:
                   name: rudderstack-provider-write-key
                   key: writeKey
                   optional: true
+            # About 90% of the memory limit, leaving the GC headroom.
             - name: GOMEMLIMIT
-              valueFrom:
-                resourceFieldRef:
-                  resource: limits.memory
+              value: 230MiB
           ports:
             - containerPort: 8080
               name: metrics

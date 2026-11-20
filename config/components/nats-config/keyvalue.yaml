@@ -9,3 +9,4 @@ spec:
   ttl: 25h
   history: 1
   storage: file
+  replicas: 3

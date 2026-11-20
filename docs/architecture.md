@@ -209,22 +209,33 @@ other milo-os providers:
 |---|---|---|
 | `base/crd` | `TrackingRule` CRD | Milo |
 | `rules` | The event catalog's `TrackingRule`s | Milo |
-| `base/manager` (+ `base/rbac`) | Manager Deployment, ServiceAccount, metrics Service | Core control plane cluster |
-| `components/controller_rbac` | Generated ClusterRole | With the manager |
-| `components/milo-integration` | Points the manager at Milo for rules, projects and leader election | With the manager |
+| `base/manager` | Manager Deployment, ServiceAccount, metrics Service | Core control plane cluster |
+| `components/controller_rbac` | Generated ClusterRole: read rules and projects, write rule status | Milo, with `base/crd` |
+| `components/milo-integration` | Points the manager at Milo for rules, projects and leader election; disables the unused ServiceAccount token | With the manager |
 | `components/observability` | ServiceMonitor | With the manager |
 | `components/nats-config` | `AUDIT_EVENTS` consumer and the limits KV bucket, applied by NACK | Core control plane cluster |
 
-Every manager setting is an env var the deployment overlay can patch.
+`base/rbac` and `components/namespace` are for running outside Milo, such as
+`make deploy` into a development cluster.
+
+The manager's settings are env vars the deployment overlay can patch.
 `DRY_RUN` defaults to `true`, and with no `NATS_URL` only the controller
-runs, so an overlay opts in to consuming and then to sending. The overlay
-supplies:
+runs, so an overlay opts in to consuming and then to sending. In dry-run the
+provider logs each call's type, event, IDs and property names, never property
+or trait values, which can hold email addresses. The overlay supplies:
 
 - the Milo kubeconfig, client certificate and CA bundle (see
-  `milo-integration`)
+  `milo-integration`). The certificate needs only `controller_rbac` bound to
+  its user, plus a Role for its Lease in `milo-system`. It should not carry
+  `system:masters`: the pod holds an external write key and calls out to
+  RudderStack.
 - `NATS_URL` and the NATS client certificate (`NATS_TLS_*`)
-- `RUDDERSTACK_DATA_PLANE_URL`, `DRY_RUN=false`, and a Secret named
-  `rudderstack-provider-write-key` with key `writeKey`
+- `RUDDERSTACK_DATA_PLANE_URL` (must be `https://`), `DRY_RUN=false`, and a
+  Secret named `rudderstack-provider-write-key` with key `writeKey`
+
+Metrics are served over plain HTTP. They hold only counters, and the
+authenticated alternative would send scrapers' tokens to Milo, which cannot
+verify them. No webhook server runs and no certificate is generated.
 
 ## Rollout
 
