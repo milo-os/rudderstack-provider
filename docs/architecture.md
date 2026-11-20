@@ -127,8 +127,15 @@ Illustrative definitions. The Profiles project defines them precisely.
 - Every call has a deterministic `messageId`, so RudderStack drops duplicates
   from redelivery: `<auditID>/<rule>`, or `<rule>/<subject>/<date>` for
   once-per-day rules.
-- A batch RudderStack rejects with `4xx` is split in half repeatedly until
-  the rejected calls are isolated. Those are dropped and counted.
+- A batch RudderStack rejects as malformed (`400`, `413`) is split in half
+  repeatedly until the rejected calls are isolated. Those are dropped and
+  counted.
+- Every other failure is retried, including `401`, `403` and `404`. Those
+  mean a wrong write key or data plane URL, so a configuration mistake shows
+  up as a growing backlog rather than as lost events.
+- Each request stamps `sentAt`, so RudderStack keeps each event's
+  `originalTimestamp` even when it is delivered late, after an outage or in a
+  backfill.
 - Memory is bounded by the JetStream consumer's `maxAckPending`, since
   unacked messages are the only thing the batcher holds.
 - At startup the provider refuses to run when the consumer's `ackWait` is
