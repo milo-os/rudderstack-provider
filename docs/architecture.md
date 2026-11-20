@@ -74,9 +74,19 @@ change. See [`config/samples`](../config/samples).
 | `limit` | Optional `OncePerDay`: send at most one call per subject per UTC day |
 | `properties` | CEL values sent with the call; nothing else leaves the platform |
 
-CEL expressions can read `verb`, `user`, `userAgent`, `objectRef`, `object`
-and `tenant`. The controller compiles every expression and sets the rule's
-`Ready` condition; rules that are not Ready are not evaluated.
+CEL expressions can read `verb`, `user`, `userAgent`, `objectRef`, `object`,
+`tenant` and `actor`. The controller compiles every expression and sets the
+rule's `Ready` condition; rules that are not Ready are not evaluated.
+
+`actor.kind` says who made the request, decided in one place so every rule
+agrees:
+
+- `system`: a `system:` username, meaning a platform controller or
+  Kubernetes service account.
+- `serviceaccount`: a customer machine account, such as a CI pipeline. These
+  authenticate as `{name}@{namespace}.{project}.{suffix}`, matched by
+  `--service-account-email-suffix`. Without the flag they count as users.
+- `user`: a person.
 
 ### Event catalog
 
@@ -88,8 +98,9 @@ good. Each event carries:
 
 - `name`, `namespace` and `project`, which identify the resource, so Profiles
   matches a removal to its add regardless of who made either.
-- `changeSource` (`human` or `system`), so milestones such as "user removes
-  domains" can count only human actions.
+- `changeSource`: `human`, `automation` (a customer machine account) or
+  `system` (the platform), from `actor.kind`, so milestones such as "user
+  removes domains" can count only human actions.
 
 | Event | Source | Feeds |
 |---|---|---|
@@ -102,8 +113,8 @@ good. Each event carries:
 | `DNS Zone Added` / `DNS Zone Removed` | DNS zone resource (to confirm) | First zone, >5, >15 org, removes zones |
 | `Load Balancer Added` / `Load Balancer Removed` | To confirm | ALB added |
 | `Tunnel Added` / `Tunnel Removed` | To confirm (`Connector`?) | >4 active tunnels |
-| `datumctl Used` (once per day) | Any request by a human user with a `datumctl/` user agent | First datumctl access, frequent / active datumctl user |
-| `Active` (once per day) | Any request by a human user | Inactivity > 14 days |
+| `datumctl Used` (once per day) | Any request by a person (`actor.kind == "user"`) with a `datumctl/` user agent | First datumctl access, frequent / active datumctl user |
+| `Active` (once per day) | Any request by a person (`actor.kind == "user"`) | Inactivity > 14 days |
 | `group` (`name`, `displayName`) | `resourcemanager.miloapis.com/organizations` create/update | Org-level milestones |
 
 ### Milestones in Profiles
@@ -149,6 +160,11 @@ per rule, subject and UTC day (the subject is hashed, since user IDs can hold
 characters KV keys do not allow). Its TTL must be at least 24 hours; the
 provider refuses to start otherwise. A key is created atomically before the
 call is queued, and only the first creation sends.
+
+Each replica remembers the keys it has seen taken, so most repeat checks of
+the day never reach the bucket. Without it every matching request would wait
+on a round trip, and a slow bucket would stall the consumer. Errors are not
+remembered, so the next check retries the bucket.
 
 Every failure mode sends rather than drops, and relies on the call's
 `<rule>/<subject>/<date>` `messageId` for RudderStack to deduplicate:

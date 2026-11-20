@@ -2,6 +2,7 @@ package limit
 
 import (
 	"context"
+	"errors"
 	"regexp"
 	"testing"
 	"time"
@@ -69,5 +70,71 @@ func TestKVAllow(t *testing.T) {
 	nc.Close()
 	if _, err := l.Allow(ctx, DailyKey("r", "u3", day)); err == nil {
 		t.Fatal("expected an error from a closed connection")
+	}
+}
+
+type countingLimiter struct {
+	calls int
+	err   error
+	seen  map[string]bool
+}
+
+func (l *countingLimiter) Allow(_ context.Context, key string) (bool, error) {
+	l.calls++
+	if l.err != nil {
+		return false, l.err
+	}
+	if l.seen == nil {
+		l.seen = map[string]bool{}
+	}
+	first := !l.seen[key]
+	l.seen[key] = true
+	return first, nil
+}
+
+func TestCached(t *testing.T) {
+	ctx := context.Background()
+	next := &countingLimiter{}
+	c := NewCached(next)
+
+	for i, want := range []bool{true, false, false} {
+		got, err := c.Allow(ctx, "k1")
+		if err != nil || got != want {
+			t.Fatalf("call %d: Allow() = %v, %v, want %v", i, got, err, want)
+		}
+	}
+	if next.calls != 1 {
+		t.Fatalf("bucket calls = %d, want 1: repeats must come from the cache", next.calls)
+	}
+
+	// A key another replica took is cached once seen.
+	next.seen["k2"] = true
+	for range 2 {
+		if got, _ := c.Allow(ctx, "k2"); got {
+			t.Fatal("Allow(k2) = true for a key already taken")
+		}
+	}
+	if next.calls != 2 {
+		t.Fatalf("bucket calls = %d, want 2", next.calls)
+	}
+}
+
+func TestCachedDoesNotCacheErrors(t *testing.T) {
+	ctx := context.Background()
+	next := &countingLimiter{err: errors.New("timeout")}
+	c := NewCached(next)
+
+	for range 2 {
+		if _, err := c.Allow(ctx, "k"); err == nil {
+			t.Fatal("expected the bucket error")
+		}
+	}
+	if next.calls != 2 {
+		t.Fatalf("bucket calls = %d, want 2: errors must not be cached", next.calls)
+	}
+
+	next.err = nil
+	if got, err := c.Allow(ctx, "k"); err != nil || !got {
+		t.Fatalf("after recovery Allow() = %v, %v, want true", got, err)
 	}
 }

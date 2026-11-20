@@ -36,6 +36,8 @@ type pipelineOptions struct {
 	dataPlaneURL string
 	dryRun       bool
 
+	serviceAccountEmailSuffix string
+
 	batch pipeline.BatchConfig
 }
 
@@ -53,6 +55,9 @@ func (o *pipelineOptions) bindFlags(fs *flag.FlagSet) {
 	fs.StringVar(&o.dataPlaneURL, "rudderstack-data-plane-url", "",
 		"RudderStack data plane URL. The write key is read from $"+writeKeyEnv+".")
 	fs.BoolVar(&o.dryRun, "dry-run", false, "Log RudderStack calls instead of sending them.")
+	fs.StringVar(&o.serviceAccountEmailSuffix, "service-account-email-suffix", "",
+		"Domain suffix of customer machine account emails, which rules see as actor.kind \"serviceaccount\". "+
+			"When empty, machine accounts count as users.")
 	fs.IntVar(&o.batch.MaxCalls, "batch-max-calls", 100, "Most calls in one request to RudderStack.")
 	fs.IntVar(&o.batch.MaxBytes, "batch-max-bytes", rudderstack.MaxBatchBytes,
 		"Largest request body sent to RudderStack. Capped at RudderStack's limit.")
@@ -144,6 +149,10 @@ func setupPipeline(ctx context.Context, mgr ctrl.Manager, o *pipelineOptions, st
 		return nil, err
 	}
 
+	if o.serviceAccountEmailSuffix == "" {
+		log.Info("No --service-account-email-suffix set; customer machine accounts count as users")
+	}
+
 	var sender rudderstack.Sender = rudderstack.NewClient(o.dataPlaneURL, os.Getenv(writeKeyEnv), o.batch.SendTimeout)
 	if o.dryRun {
 		log.Info("Dry run: RudderStack calls are logged, not sent")
@@ -157,8 +166,10 @@ func setupPipeline(ctx context.Context, mgr ctrl.Manager, o *pipelineOptions, st
 			Rules:   store,
 			Batcher: batcher,
 			Orgs:    resolver,
-			Limiter: &limit.KV{Bucket: bucket},
+			Limiter: limit.NewCached(&limit.KV{Bucket: bucket}),
 			Log:     log.WithName("processor"),
+
+			ServiceAccountEmailSuffix: o.serviceAccountEmailSuffix,
 		},
 		Synced: func() bool { return store.HasSynced() && resolver.HasSynced() },
 		Log:    log,

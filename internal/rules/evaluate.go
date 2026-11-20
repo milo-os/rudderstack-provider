@@ -22,8 +22,9 @@ type Result struct {
 }
 
 // Activation builds the CEL variables for an event. It is built once per
-// event and shared by every rule.
-func Activation(e *audit.Event) map[string]any {
+// event and shared by every rule. serviceAccountSuffix identifies customer
+// machine accounts for actor.kind.
+func Activation(e *audit.Event, serviceAccountSuffix string) map[string]any {
 	user := map[string]any{
 		"username": e.User.Username,
 		"uid":      e.User.UID,
@@ -50,6 +51,7 @@ func Activation(e *audit.Event) map[string]any {
 		VarObjectRef: objectRef,
 		VarObject:    e.Object(),
 		VarTenant:    map[string]any{"type": tenant.Type, "name": tenant.Name},
+		VarActor:     map[string]any{"kind": e.ActorKind(serviceAccountSuffix)},
 	}
 }
 

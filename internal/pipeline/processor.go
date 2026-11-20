@@ -47,6 +47,9 @@ type Processor struct {
 	Orgs    OrgResolver
 	Limiter limit.Limiter
 	Log     logr.Logger
+	// ServiceAccountEmailSuffix identifies customer machine accounts, so
+	// rules can tell them from people through actor.kind.
+	ServiceAccountEmailSuffix string
 }
 
 // Handle processes one JetStream message. Messages that produce no calls are
@@ -90,7 +93,7 @@ func (p *Processor) calls(msg jetstream.Msg, ev *audit.Event) []rudderstack.Mess
 	for _, cr := range p.Rules.List() {
 		rule := cr.Rule
 		if vars == nil {
-			vars = rules.Activation(ev)
+			vars = rules.Activation(ev, p.ServiceAccountEmailSuffix)
 		}
 
 		res, err := cr.Evaluate(ev, vars)
