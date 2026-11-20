@@ -3,8 +3,8 @@
 Sends product analytics to [RudderStack] from Milo platform activity. The
 provider consumes Kubernetes audit events from NATS JetStream, evaluates them
 against `TrackingRule` resources, and sends `track`, `identify` and `group`
-calls. Milestones are computed downstream in BigQuery by RudderStack
-Profiles. It shares its design with [search].
+calls. Milestones are computed downstream by scheduled queries in BigQuery.
+It shares its design with [search].
 
 See [docs/architecture.md](docs/architecture.md) for the design.
 
@@ -33,7 +33,7 @@ spec:
 ```
 
 Milestones such as "first domain" or "more than 3 domains" are computed from
-these events in BigQuery by RudderStack Profiles, not by the provider.
+these events by scheduled queries in BigQuery, not by the provider.
 
 The rules for the analytics event list are in [config/rules](config/rules).
 
