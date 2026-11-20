@@ -1,0 +1,103 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rudderstack-provider-alerts
+  labels:
+    app.kubernetes.io/name: rudderstack-provider
+spec:
+  groups:
+    - name: rudderstack-provider.pipeline
+      rules:
+        - alert: RudderStackProviderNotConsuming
+          expr: |
+            sum by (namespace) (
+              increase(rudderstack_provider_events_total[30m])
+            ) == 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: RudderStack provider has stopped consuming audit events
+            description: |
+              No audit events have been consumed for 45 minutes. The consumer
+              waits for the TrackingRule and Project caches before it starts,
+              with no timeout, so a Milo outage holds up the whole stream.
+              Check the manager's logs and its connections to Milo and NATS.
+        - alert: RudderStackProviderSendFailing
+          expr: |
+            sum by (namespace) (
+              increase(rudderstack_provider_flushes_total{result="retry"}[30m])
+            ) > 0
+            and
+            sum by (namespace) (
+              increase(rudderstack_provider_flushes_total{result="success"}[30m])
+            ) == 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: RudderStack provider cannot deliver calls
+            description: |
+              Every batch sent to RudderStack in the last 45 minutes failed and
+              was returned to JetStream for redelivery. Nothing is lost until
+              the AUDIT_EVENTS stream's retention runs out. Check the data
+              plane URL, the write key and RudderStack's status.
+        - alert: RudderStackProviderCallsDropped
+          expr: |
+            sum by (namespace) (
+              increase(rudderstack_provider_calls_total{result="dropped"}[1h])
+            ) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: RudderStack rejected calls and the provider dropped them
+            description: |
+              RudderStack rejected calls as malformed or too large (400 or
+              413), so they were dropped. The manager logs each one with its
+              event and messageId. A rule's properties are the usual cause.
+        - alert: RudderStackProviderRuleErrors
+          expr: |
+            sum by (namespace, rule) (
+              increase(rudderstack_provider_rule_errors_total[1h])
+            ) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: TrackingRule {{ $labels.rule }} fails to evaluate
+            description: |
+              The rule's CEL expressions error on real audit events, so those
+              events send nothing. Check the manager's logs for the rule.
+        - alert: RudderStackProviderLimitErrors
+          expr: |
+            sum by (namespace) (
+              increase(rudderstack_provider_limit_errors_total[15m])
+            ) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: RudderStack provider cannot reach its once-per-day limit bucket
+            description: |
+              Once-per-day rules are sending without their limit, so every
+              matching request is sent and RudderStack sees duplicates. Its
+              messageId deduplication is opt-in and covers a limited window, so
+              daily counts can be inflated. Check the
+              rudderstack-provider-limits KV bucket in NATS.
+        - alert: RudderStackProviderOrgsUnresolved
+          expr: |
+            sum by (namespace) (
+              increase(rudderstack_provider_orgs_unresolved_total[1h])
+            )
+            /
+            sum by (namespace) (
+              increase(rudderstack_provider_rule_matches_total[1h])
+            ) > 0.05
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: RudderStack provider cannot resolve organizations for projects
+            description: |
+              More than 5% of matched events in a project could not be tied to
+              an organization, so they are sent without a groupId. The Project
+              cache may be stale or its watch on Milo failing.

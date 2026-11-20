@@ -10,6 +10,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	toolscache "k8s.io/client-go/tools/cache"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"go.miloapis.net/rudderstack-provider/internal/audit"
 )
@@ -17,6 +19,36 @@ import (
 // ProjectGVK is Milo's Project. It is read as unstructured so the provider
 // does not depend on Milo's Go module.
 var ProjectGVK = schema.GroupVersionKind{Group: "resourcemanager.miloapis.com", Version: "v1alpha1", Kind: "Project"}
+
+// CacheByObject configures the manager's cache to keep only what the resolver
+// reads from each project. There is one project per customer project, so
+// caching whole objects would grow memory with the platform.
+func CacheByObject() map[client.Object]cache.ByObject {
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(ProjectGVK)
+	return map[client.Object]cache.ByObject{obj: {Transform: TrimProject}}
+}
+
+// TrimProject strips a project down to its name, identity and owner.
+func TrimProject(obj any) (any, error) {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return obj, nil
+	}
+	t := &unstructured.Unstructured{}
+	t.SetGroupVersionKind(u.GroupVersionKind())
+	t.SetName(u.GetName())
+	t.SetUID(u.GetUID())
+	t.SetResourceVersion(u.GetResourceVersion())
+	for _, field := range []string{"kind", "name"} {
+		if v, found, _ := unstructured.NestedString(u.Object, "spec", "ownerRef", field); found {
+			if err := unstructured.SetNestedField(t.Object, v, "spec", "ownerRef", field); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return t, nil
+}
 
 // +kubebuilder:rbac:groups=resourcemanager.miloapis.com,resources=projects,verbs=get;list;watch
 

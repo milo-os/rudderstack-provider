@@ -3,3 +3,4 @@ kind: Component
 
 resources:
   - service-monitor.yaml
+  - prometheus-rule.yaml

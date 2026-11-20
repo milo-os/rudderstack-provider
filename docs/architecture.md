@@ -127,6 +127,25 @@ tables RudderStack loads. RudderStack's BigQuery destination writes one table
 per event (`domain_added`, `domain_removed`, …) plus `tracks`, `identifies`,
 `groups` and `users`, in the `product_analytics` dataset.
 
+### BigQuery destination
+
+`datum-cloud/infra` (`gcp/02-managed-infra`) creates the dataset, a
+`<project>-rudderstack-loads` staging bucket and a `rudderstack-loader`
+service account in each GCP project. RudderStack reaches it through workload
+identity federation, not a service account key. Set the destination up in
+the RudderStack workspace for that environment as follows:
+
+- **Credentials:** use the workload identity pool and provider from the
+  Pulumi stack's `rudderstack` output.
+- **Trust:** the provider's attribute condition names one RudderStack
+  workspace. RudderStack sets the workspace ID as the STS session name, so
+  the trust rests on that ID. Keep one condition per workspace, and never
+  widen it to RudderStack's whole AWS account.
+- **File clean-up:** leave "clean up files after sync" off. The loader can't
+  delete objects, and the bucket's 7-day lifecycle removes load files.
+- **Order:** confirm a first sync succeeds in staging before configuring the
+  production destination.
+
 ### How they run
 
 - Each milestone table has one query, kept as a `.sql` file in git and
@@ -186,9 +205,13 @@ pre-sign-up activity needs to be tied to accounts.
 - Messages are acknowledged only after RudderStack returns 2xx for every call
   they produced. Network errors, `429` and `5xx` nack the message with a 10s
   delay.
-- Every call has a deterministic `messageId`, so RudderStack drops duplicates
-  from redelivery: `<auditID>/<rule>`, or `<rule>/<subject hash>/<date>` for
-  once-per-day rules.
+- Every call has a deterministic `messageId`: `<auditID>/<rule>`, or
+  `<rule>/<subject hash>/<date>` for once-per-day rules. Delivery is at least
+  once, so the same call can reach RudderStack more than once, after a
+  redelivery or a limiter outage. RudderStack's own deduplication is opt-in
+  and covers a limited window, so duplicates can reach the warehouse. The
+  milestone queries deduplicate on `messageId`, which is what keeps counts
+  right.
 - A batch RudderStack rejects as malformed (`400`, `413`) is split in half
   repeatedly until the rejected calls are isolated. Those are dropped and
   counted.
@@ -202,6 +225,12 @@ pre-sign-up activity needs to be tied to accounts.
   unacked messages are the only thing the batcher holds.
 - At startup the provider refuses to run when the consumer's `ackWait` is
   shorter than the flush interval plus two send timeouts.
+- The consumer starts only once the TrackingRule and Project caches have
+  synced, with no timeout, so a call never goes out without its rules or
+  organization. The cost is that a Milo outage at startup holds up the whole
+  audit stream until Milo is back. The pod stays unready meanwhile, and
+  `RudderStackProviderNotConsuming` fires. Events wait in `AUDIT_EVENTS`
+  until its retention runs out.
 
 ## State
 
@@ -216,14 +245,21 @@ the day never reach the bucket. Without it every matching request would wait
 on a round trip, and a slow bucket would stall the consumer. Errors are not
 remembered, so the next check retries the bucket.
 
-Every failure mode sends rather than drops, and relies on the call's
-`<rule>/<subject hash>/<date>` `messageId` for RudderStack to deduplicate:
+Every failure mode sends rather than drops. The extra calls share the
+`<rule>/<subject hash>/<date>` `messageId`, so the milestone queries count
+them once, but they do reach RudderStack and are billed:
 
 - A redelivered message skips the limiter. Its first delivery already took
   the key, but its send failed.
-- If the bucket is unavailable, the call is sent and counted in
-  `rudderstack_provider_limit_errors_total`.
-- Losing the bucket sends at most one extra call per subject that day.
+- If the bucket is unavailable, every matching call is sent and counted in
+  `rudderstack_provider_limit_errors_total`, for as long as the outage lasts.
+- Losing the bucket's contents sends one extra call per subject that day.
+
+The one case that loses a signal: the key is taken before the call is sent.
+If RudderStack then rejects the call as malformed (`400`, `413`) and it is
+dropped, that subject sends nothing for the rule until the next UTC day.
+Dropped calls are counted and alert, and a rejection means a rule's output
+is wrong, which needs fixing either way.
 
 The limit exists for cost and volume. RudderStack bills by event, and
 forwarding every datumctl or console request would multiply volume for no
@@ -285,7 +321,7 @@ other milo-os providers:
 | `base/manager` | Manager Deployment, ServiceAccount, metrics Service | Core control plane cluster |
 | `components/controller_rbac` | Generated ClusterRole: read rules and projects, write rule status | Milo, with `base/crd` |
 | `components/milo-integration` | Points the manager at Milo for rules, projects and leader election; disables the unused ServiceAccount token | With the manager |
-| `components/observability` | ServiceMonitor | With the manager |
+| `components/observability` | ServiceMonitor and alert rules | With the manager |
 | `components/nats-config` | `AUDIT_EVENTS` consumer and the limits KV bucket, applied by NACK | Core control plane cluster |
 
 `base/rbac` and `components/namespace` are for running outside Milo, such as
@@ -310,6 +346,24 @@ supplies:
 - `RUDDERSTACK_DATA_PLANE_URL` (must be `https://`), `DRY_RUN=false`, and a
   Secret named `rudderstack-provider-write-key` with key `writeKey`
 
+The Project cache keeps only each project's name, identity and owner, so
+memory grows by a few strings per customer project rather than whole
+objects.
+
+### Alerts
+
+`components/observability` ships a `PrometheusRule`. Every alert is a
+warning, and an environment adds routing labels such as `team` by patch.
+
+| Alert | Fires when |
+|---|---|
+| `RudderStackProviderNotConsuming` | No audit events consumed for 45 minutes, such as when Milo is down at startup |
+| `RudderStackProviderSendFailing` | Every send for 45 minutes failed and was nacked |
+| `RudderStackProviderCallsDropped` | RudderStack rejected calls as malformed and they were dropped |
+| `RudderStackProviderRuleErrors` | A rule's expressions error on real events |
+| `RudderStackProviderLimitErrors` | The limit bucket has failed for 30 minutes, so once-per-day calls send unlimited |
+| `RudderStackProviderOrgsUnresolved` | Over 5% of matched calls in an hour have no organization |
+
 Metrics are served over plain HTTP. They hold only counters, and the
 authenticated alternative would send scrapers' tokens to Milo, which cannot
 verify them. No webhook server runs and no certificate is generated.
@@ -331,7 +385,7 @@ verify them. No webhook server runs and no certificate is generated.
 | 4 | Once-per-day limit (NATS KV), which turns on `datumctl Used` and `Active`; organization resolution and `group` calls | Done (#5) |
 | 5a | Deployable bundle in the milo-os provider layout | Done (#6) |
 | 5b | Staging in dry-run: Milo CRD, rules and least-privilege RBAC; manager, NACK consumer and KV bucket | In review (datum-cloud/infra#9648) |
-| 5c | BigQuery `product_analytics` dataset, RudderStack loader service account and GCS staging bucket (Pulumi, `infra/gcp`) | Next |
+| 5c | BigQuery `product_analytics` dataset, RudderStack loader service account and GCS staging bucket, reached through workload identity federation (Pulumi, `infra/gcp`) | Approved (datum-cloud/infra#9719) |
 | 5d | Write key ExternalSecret, `DRY_RUN=false`; production overlay | |
 | 6 | Backfill job | |
 | 7 | Milestone scheduled queries and their Pulumi schedules (`infra/gcp`); reverse ETL to the marketing tool | |
@@ -366,3 +420,4 @@ chosen; see [Why not RudderStack Profiles](#why-not-rudderstack-profiles).
 | DNS zone, load balancer, tunnel kinds | Resource groups/names to confirm |
 | Frequent / active datumctl user | Definition needed (lives in the milestone SQL) |
 | Galactic usage | Definition needed |
+| Organization display names | The `group` call sends each organization's `displayName`, which customers type freely. Record approval to send it before production |
