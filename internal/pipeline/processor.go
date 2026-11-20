@@ -130,7 +130,8 @@ func (p *Processor) calls(msg jetstream.Msg, ev *audit.Event) []rudderstack.Mess
 
 // allowToday applies a once-per-day limit. It gives m a messageId shared by
 // every call the rule makes for the subject that day, so a duplicate that gets
-// past the limiter is dropped by RudderStack.
+// past the limiter is dropped by RudderStack. The subject is hashed in the
+// messageId because a userId can be an email address, and messageIds are logged.
 func (p *Processor) allowToday(rule *analyticsv1alpha1.TrackingRule, ev *audit.Event, m *rudderstack.Message, groupID string, redelivered bool) bool {
 	subject := m.UserID
 	if rule.Spec.Subject == analyticsv1alpha1.SubjectOrganization {
@@ -140,7 +141,7 @@ func (p *Processor) allowToday(rule *analyticsv1alpha1.TrackingRule, ev *audit.E
 	if day.IsZero() {
 		day = time.Now()
 	}
-	m.MessageID = rule.Name + "/" + subject + "/" + day.UTC().Format(time.DateOnly)
+	m.MessageID = rule.Name + "/" + limit.SubjectHash(subject) + "/" + day.UTC().Format(time.DateOnly)
 
 	if redelivered {
 		return true

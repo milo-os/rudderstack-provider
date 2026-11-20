@@ -5,13 +5,16 @@ import (
 	"errors"
 	"maps"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/funcr"
 	"github.com/nats-io/nats.go/jetstream"
 
 	analyticsv1alpha1 "go.miloapis.net/rudderstack-provider/api/v1alpha1"
+	"go.miloapis.net/rudderstack-provider/internal/limit"
 	"go.miloapis.net/rudderstack-provider/internal/orgs"
 	"go.miloapis.net/rudderstack-provider/internal/rudderstack"
 	"go.miloapis.net/rudderstack-provider/internal/rules"
@@ -261,7 +264,8 @@ func TestProcessorOncePerDay(t *testing.T) {
 	for _, c := range sub.calls {
 		ids = append(ids, c.MessageID)
 	}
-	want := []string{"datumctl-used/u1/2026-11-19", "datumctl-used/u2/2026-11-19", "datumctl-used/u1/2026-11-20"}
+	u1, u2 := limit.SubjectHash("u1"), limit.SubjectHash("u2")
+	want := []string{"datumctl-used/" + u1 + "/2026-11-19", "datumctl-used/" + u2 + "/2026-11-19", "datumctl-used/" + u1 + "/2026-11-20"}
 	if !slices.Equal(ids, want) {
 		t.Fatalf("messageIds = %v, want %v", ids, want)
 	}
@@ -306,7 +310,32 @@ func TestProcessorOncePerDayPerOrganization(t *testing.T) {
 	// A request with no organization cannot be counted per organization.
 	p.Handle(auditMsg(t, map[string]any{"auditID": "a3", "annotations": nil}))
 
-	if len(sub.calls) != 1 || sub.calls[0].MessageID != "org-active/acme/2026-11-19" {
+	if len(sub.calls) != 1 || sub.calls[0].MessageID != "org-active/"+limit.SubjectHash("acme")+"/2026-11-19" {
 		t.Fatalf("calls = %+v, want one call for acme", sub.calls)
+	}
+}
+
+func TestProcessorOncePerDayKeepsEmailOutOfLogs(t *testing.T) {
+	// A user with no uid falls back to their username, often an email. Neither
+	// the messageId nor the dry-run line may carry it.
+	const email = "alice@example.com"
+	p, sub := newTestProcessor(t, map[string]analyticsv1alpha1.TrackingRuleSpec{"datumctl-used": datumctlUsed})
+	p.Handle(auditMsg(t, map[string]any{"user": map[string]any{"username": email}}))
+
+	if len(sub.calls) != 1 {
+		t.Fatalf("calls = %+v, want 1", sub.calls)
+	}
+	if strings.Contains(sub.calls[0].MessageID, email) {
+		t.Fatalf("messageId %q holds the email", sub.calls[0].MessageID)
+	}
+	var lines []string
+	log := funcr.New(func(_, args string) { lines = append(lines, args) }, funcr.Options{})
+	if err := (rudderstack.DryRunSender{Log: log}).Send(t.Context(), sub.calls); err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range lines {
+		if strings.Contains(l, email) {
+			t.Fatalf("dry run logged the email: %s", l)
+		}
 	}
 }

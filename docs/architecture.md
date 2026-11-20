@@ -187,7 +187,7 @@ pre-sign-up activity needs to be tied to accounts.
   they produced. Network errors, `429` and `5xx` nack the message with a 10s
   delay.
 - Every call has a deterministic `messageId`, so RudderStack drops duplicates
-  from redelivery: `<auditID>/<rule>`, or `<rule>/<subject>/<date>` for
+  from redelivery: `<auditID>/<rule>`, or `<rule>/<subject hash>/<date>` for
   once-per-day rules.
 - A batch RudderStack rejects as malformed (`400`, `413`) is split in half
   repeatedly until the rejected calls are isolated. Those are dropped and
@@ -217,7 +217,7 @@ on a round trip, and a slow bucket would stall the consumer. Errors are not
 remembered, so the next check retries the bucket.
 
 Every failure mode sends rather than drops, and relies on the call's
-`<rule>/<subject>/<date>` `messageId` for RudderStack to deduplicate:
+`<rule>/<subject hash>/<date>` `messageId` for RudderStack to deduplicate:
 
 - A redelivered message skips the limiter. Its first delivery already took
   the key, but its send failed.
