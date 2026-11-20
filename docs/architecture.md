@@ -59,7 +59,7 @@ authenticated user, the request scope and the object.
 
 `TrackingRule` (`analytics.miloapis.com/v1alpha1`, cluster-scoped) maps audit
 events to one RudderStack call. Rules are added through GitOps without a code
-change. See [`config/samples`](../config/samples).
+change. See [`config/rules`](../config/rules).
 
 | Field | Purpose |
 |---|---|
@@ -198,6 +198,33 @@ one-off job lists existing resources and sends their "added" events with the
 resource's `creationTimestamp` as `originalTimestamp` and `backfill/<uid>` as
 `messageId`, plus `identify` and `group` for existing users and
 organizations. It runs once, before milestones are switched on for marketing.
+
+## Deployment
+
+The image and a kustomize bundle are published to `ghcr.io/milo-os` on every
+push. `datum-cloud/infra` deploys from the bundle, the same way it deploys
+other milo-os providers:
+
+| Bundle path | Contents | Applied to |
+|---|---|---|
+| `base/crd` | `TrackingRule` CRD | Milo |
+| `rules` | The event catalog's `TrackingRule`s | Milo |
+| `base/manager` (+ `base/rbac`) | Manager Deployment, ServiceAccount, metrics Service | Core control plane cluster |
+| `components/controller_rbac` | Generated ClusterRole | With the manager |
+| `components/milo-integration` | Points the manager at Milo for rules, projects and leader election | With the manager |
+| `components/observability` | ServiceMonitor | With the manager |
+| `components/nats-config` | `AUDIT_EVENTS` consumer and the limits KV bucket, applied by NACK | Core control plane cluster |
+
+Every manager setting is an env var the deployment overlay can patch.
+`DRY_RUN` defaults to `true`, and with no `NATS_URL` only the controller
+runs, so an overlay opts in to consuming and then to sending. The overlay
+supplies:
+
+- the Milo kubeconfig, client certificate and CA bundle (see
+  `milo-integration`)
+- `NATS_URL` and the NATS client certificate (`NATS_TLS_*`)
+- `RUDDERSTACK_DATA_PLANE_URL`, `DRY_RUN=false`, and a Secret named
+  `rudderstack-provider-write-key` with key `writeKey`
 
 ## Rollout
 

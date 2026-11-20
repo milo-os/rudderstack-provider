@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The JetStream consumer and KV bucket the provider reads and writes. Applied
+# by NACK, so the provider never creates or changes them itself.
+resources:
+  - consumer.yaml
+  - keyvalue.yaml

@@ -1,0 +1,139 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rudderstack-provider
+  namespace: rudderstack-provider-system
+  labels:
+    control-plane: rudderstack-provider
+    app.kubernetes.io/name: rudderstack-provider
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  # Every replica consumes audit events; JetStream spreads messages across
+  # them. Only the leader writes TrackingRule status.
+  replicas: 2
+  selector:
+    matchLabels:
+      control-plane: rudderstack-provider
+  template:
+    metadata:
+      labels:
+        control-plane: rudderstack-provider
+        app.kubernetes.io/name: rudderstack-provider
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+    spec:
+      serviceAccountName: rudderstack-provider
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    control-plane: rudderstack-provider
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              control-plane: rudderstack-provider
+      containers:
+        - name: manager
+          image: ghcr.io/milo-os/rudderstack-provider:dev
+          # Every setting is an env var referenced from args, so an overlay
+          # can patch one value without rewriting the args list.
+          args:
+            - --leader-elect=$(LEADER_ELECT)
+            - --leader-elect-namespace=$(LEADER_ELECT_NAMESPACE)
+            - --metrics-bind-address=$(METRICS_BIND_ADDRESS)
+            - --metrics-secure=false
+            - --health-probe-bind-address=$(HEALTH_PROBE_BIND_ADDRESS)
+            - --zap-devel=false
+            - --nats-url=$(NATS_URL)
+            - --nats-tls-cert=$(NATS_TLS_CERT)
+            - --nats-tls-key=$(NATS_TLS_KEY)
+            - --nats-tls-ca=$(NATS_TLS_CA)
+            - --nats-stream=$(NATS_STREAM)
+            - --nats-consumer=$(NATS_CONSUMER)
+            - --nats-kv-bucket=$(NATS_KV_BUCKET)
+            - --rudderstack-data-plane-url=$(RUDDERSTACK_DATA_PLANE_URL)
+            - --dry-run=$(DRY_RUN)
+          env:
+            - name: LEADER_ELECT
+              value: "true"
+            - name: LEADER_ELECT_NAMESPACE
+              value: kube-system
+            - name: METRICS_BIND_ADDRESS
+              value: ":8080"
+            - name: HEALTH_PROBE_BIND_ADDRESS
+              value: ":8081"
+            # Without a NATS URL only the TrackingRule controller runs.
+            - name: NATS_URL
+              value: ""
+            - name: NATS_TLS_CERT
+              value: ""
+            - name: NATS_TLS_KEY
+              value: ""
+            - name: NATS_TLS_CA
+              value: ""
+            - name: NATS_STREAM
+              value: AUDIT_EVENTS
+            - name: NATS_CONSUMER
+              value: rudderstack-provider
+            - name: NATS_KV_BUCKET
+              value: rudderstack-provider-limits
+            - name: RUDDERSTACK_DATA_PLANE_URL
+              value: ""
+            # Calls are logged, not sent, until an overlay sets this to
+            # false and provides the write key.
+            - name: DRY_RUN
+              value: "true"
+            - name: RUDDERSTACK_WRITE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: rudderstack-provider-write-key
+                  key: writeKey
+                  optional: true
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef:
+                  resource: limits.memory
+          ports:
+            - containerPort: 8080
+              name: metrics
+              protocol: TCP
+            - containerPort: 8081
+              name: probe
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: probe
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: probe
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+      terminationGracePeriodSeconds: 30

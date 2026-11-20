@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: rudderstack-provider
+  labels:
+    app.kubernetes.io/name: rudderstack-provider
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rudderstack-provider
+      control-plane: rudderstack-provider
+  endpoints:
+    - port: metrics
+      interval: 30s
+      honorLabels: true

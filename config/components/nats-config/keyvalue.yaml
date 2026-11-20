@@ -1,0 +1,11 @@
+apiVersion: jetstream.nats.io/v1beta2
+kind: KeyValue
+metadata:
+  name: rudderstack-provider-limits
+spec:
+  bucket: rudderstack-provider-limits
+  # Once-per-day keys must outlive the UTC day they cover; the provider
+  # refuses to start with a TTL under 24h.
+  ttl: 25h
+  history: 1
+  storage: file

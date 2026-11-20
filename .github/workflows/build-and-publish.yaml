@@ -40,6 +40,6 @@ jobs:
     with:
       bundle-name: ghcr.io/milo-os/rudderstack-provider-kustomize
       bundle-path: config
-      image-overlays: config/manager
+      image-overlays: config/base/manager
       image-name: ghcr.io/milo-os/rudderstack-provider
     secrets: inherit

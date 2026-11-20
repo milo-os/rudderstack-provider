@@ -1,0 +1,20 @@
+apiVersion: jetstream.nats.io/v1beta2
+kind: Consumer
+metadata:
+  name: rudderstack-provider
+spec:
+  streamName: AUDIT_EVENTS
+  durableName: rudderstack-provider
+  filterSubject: audit.>
+  # Start from new events so history is not replayed into analytics. It
+  # cannot be changed once the consumer exists.
+  deliverPolicy: new
+  ackPolicy: explicit
+  # Must exceed the batch flush interval plus two send timeouts (65s by
+  # default); the provider refuses to start otherwise.
+  ackWait: 2m
+  # Bounds the provider's memory: unacked messages are all it buffers.
+  maxAckPending: 10000
+  # Redeliver until RudderStack accepts the batch; the stream's retention
+  # bounds how long an outage can last without losing events.
+  maxDeliver: -1

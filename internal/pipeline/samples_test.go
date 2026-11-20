@@ -16,7 +16,7 @@ import (
 	"go.miloapis.net/rudderstack-provider/internal/rules"
 )
 
-// sampleProcessor loads the rules in config/samples.
+// sampleProcessor loads the rules in config/rules.
 func sampleProcessor(t *testing.T) (*Processor, *recordingSubmitter) {
 	t.Helper()
 	env, err := rules.NewEnv()
@@ -25,7 +25,7 @@ func sampleProcessor(t *testing.T) (*Processor, *recordingSubmitter) {
 	}
 	store := rules.NewStore(env)
 
-	files, err := filepath.Glob(filepath.Join("..", "..", "config", "samples", "*.yaml"))
+	files, err := filepath.Glob(filepath.Join("..", "..", "config", "rules", "*.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,0 +1,20 @@
+## TrackingRules for the product analytics event catalog in
+## docs/architecture.md. Deployments apply this path to Milo. DNS zones, load balancers and tunnels are added once
+## their resource kinds are confirmed.
+##
+## Add/remove rules match every actor, not only humans: resources are often
+## removed by the system (the garbage collector deletes a project's
+## resources), and Profiles needs every removal to keep counts right. The
+## changeSource property lets Profiles count only human actions where that
+## matters, and name/namespace/project identify the resource so a removal can
+## be matched to its add whoever made it.
+resources:
+- users.yaml
+- organizations.yaml
+- projects.yaml
+- domains.yaml
+- proxies.yaml
+- workloads.yaml
+- contributors.yaml
+- activity.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

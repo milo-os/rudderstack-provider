@@ -35,7 +35,7 @@ spec:
 Milestones such as "first domain" or "more than 3 domains" are computed from
 these events in BigQuery by RudderStack Profiles, not by the provider.
 
-The rules for the analytics event list are in [config/samples](config/samples).
+The rules for the analytics event list are in [config/rules](config/rules).
 
 ## Running
 
@@ -55,6 +55,9 @@ The rules for the analytics event list are in [config/samples](config/samples).
 
 The write key is read from `$RUDDERSTACK_WRITE_KEY`. Metrics are prefixed
 `rudderstack_provider_`.
+
+The deployment bundle, and what an environment has to supply, is described in
+[docs/architecture.md](docs/architecture.md#deployment).
 
 ## Development
 
