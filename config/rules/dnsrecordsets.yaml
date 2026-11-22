@@ -1,0 +1,43 @@
+# Records show a zone is in real use rather than created and left empty.
+# Only create and delete: updates are frequent and say little.
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: dns-record-set-added
+spec:
+  event: DNS Record Set Added
+  match:
+    resource:
+      group: dns.networking.miloapis.com
+      resource: dnsrecordsets
+    verbs: [create]
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'actor.kind == "user" ? "human" : actor.kind == "serviceaccount" ? "automation" : "system"'
+---
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: dns-record-set-removed
+spec:
+  event: DNS Record Set Removed
+  match:
+    resource:
+      group: dns.networking.miloapis.com
+      resource: dnsrecordsets
+    verbs: [delete]
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'actor.kind == "user" ? "human" : actor.kind == "serviceaccount" ? "automation" : "system"'
