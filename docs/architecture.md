@@ -71,7 +71,7 @@ change. See [`config/rules`](../config/rules).
 | `match.conditions` | CEL, OR semantics |
 | `subject` | `User` (default) or `Organization` |
 | `userId` | CEL override for the RudderStack userId |
-| `groupId` | CEL override for the RudderStack groupId; defaults to the request's organization |
+| `groupId` | CEL override for the RudderStack groupId; defaults to the request's organization, as does an empty result |
 | `limit` | Optional `OncePerDay`: send at most one call per subject per UTC day |
 | `properties` | CEL values sent with the call; nothing else leaves the platform |
 
@@ -254,7 +254,10 @@ is consuming.
 - `groupId` is the organization the request was made in: the scope itself
   when it is an organization, or the project's owner when it is a project. A
   rule's `groupId` expression overrides it, which `group` calls for a new
-  organization need, since that request is not made inside it.
+  organization need, since that request is not made inside it. Project
+  events read it from the project's owner, because the console deletes
+  projects through the platform API, outside any organization. An expression
+  that returns an empty string falls back to the request's organization.
 - `track` and `identify` calls carry the organization as `context.groupId`;
   `group` calls carry it as `groupId` with the rule's properties as traits.
 - A project the provider has not seen yet (created moments before) leaves
