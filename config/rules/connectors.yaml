@@ -1,0 +1,43 @@
+# Tunnels: a Connector is what `datumctl connect tunnel` and the console's
+# Connectors pages create. Feeds tunnel milestones such as more than 4 active.
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: tunnel-added
+spec:
+  event: Tunnel Added
+  match:
+    resource:
+      group: networking.datumapis.com
+      resource: connectors
+    verbs: [create]
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'actor.kind == "user" ? "human" : actor.kind == "serviceaccount" ? "automation" : "system"'
+---
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: tunnel-removed
+spec:
+  event: Tunnel Removed
+  match:
+    resource:
+      group: networking.datumapis.com
+      resource: connectors
+    verbs: [delete]
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'actor.kind == "user" ? "human" : actor.kind == "serviceaccount" ? "automation" : "system"'

@@ -110,12 +110,12 @@ good. Each event carries:
 | `Signed Up` + `identify` (email) | `iam.miloapis.com/users` create | Sign up |
 | `Project Created` / `Project Deleted` | `resourcemanager.miloapis.com/projects` | First project |
 | `Domain Added` / `Domain Removed` | `networking.datumapis.com/domains` | First, >3 (user), >10 (org), removes domains |
-| `Proxy Added` / `Proxy Removed` | `networking.datumapis.com/httpproxies` | First proxy |
+| `Proxy Added` / `Proxy Removed` | `networking.datumapis.com/httpproxies` | First proxy, ALB added (the console's "ALB" is an HTTPProxy) |
 | `Workload Deployed` / `Workload Removed` | `compute.datumapis.com/workloads` | Deployed compute, >10 workloads, spins down compute |
 | `Contributor Added` / `Contributor Removed` | `resourcemanager.miloapis.com/organizationmemberships` | Add contributor, >10 teammates |
-| `DNS Zone Added` / `DNS Zone Removed` | DNS zone resource (to confirm) | First zone, >5, >15 org, removes zones |
-| `Load Balancer Added` / `Load Balancer Removed` | To confirm | ALB added |
-| `Tunnel Added` / `Tunnel Removed` | To confirm (`Connector`?) | >4 active tunnels |
+| `DNS Zone Added` / `DNS Zone Removed` | `dns.networking.miloapis.com/dnszones` | First zone, >5, >15 org, removes zones |
+| `Network Load Balancer Added` / `Network Load Balancer Removed` | `networking.datumapis.com/networkloadbalancers` | Layer-4 load balancer adoption |
+| `Tunnel Added` / `Tunnel Removed` | `networking.datumapis.com/connectors` | >4 active tunnels |
 | `datumctl Used` (once per day) | Any request by a person (`actor.kind == "user"`) with a `datumctl/` user agent | First datumctl access, frequent / active datumctl user |
 | `Active` (once per day) | Any request by a person (`actor.kind == "user"`) | Inactivity > 14 days |
 | `group` (`name`, `displayName`) | `resourcemanager.miloapis.com/organizations` create/update | Org-level milestones |
@@ -366,6 +366,5 @@ chosen; see [Why not RudderStack Profiles](#why-not-rudderstack-profiles).
 | BigQuery | Only the `billing-export` dataset exists today, unrelated to analytics; `product_analytics` is new |
 | Payment information completed | Billing resource to confirm |
 | Desktop app downloaded | Not visible to the control plane; track on the download page |
-| DNS zone, load balancer, tunnel kinds | Resource groups/names to confirm |
 | Frequent / active datumctl user | Definition needed (lives in the milestone SQL) |
 | Galactic usage | Definition needed |

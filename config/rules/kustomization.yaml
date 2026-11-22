@@ -1,6 +1,5 @@
 ## TrackingRules for the product analytics event catalog in
-## docs/architecture.md. Deployments apply this path to Milo. DNS zones, load balancers and tunnels are added once
-## their resource kinds are confirmed.
+## docs/architecture.md. Deployments apply this path to Milo.
 ##
 ## Add/remove rules match every actor, not only humans: resources are often
 ## removed by the system (the garbage collector deletes a project's
@@ -14,6 +13,9 @@ resources:
 - projects.yaml
 - domains.yaml
 - proxies.yaml
+- dnszones.yaml
+- connectors.yaml
+- networkloadbalancers.yaml
 - workloads.yaml
 - contributors.yaml
 - activity.yaml

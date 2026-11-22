@@ -1,0 +1,42 @@
+# DNS zones customers host on Datum. Feeds first zone and zone-count milestones.
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: dns-zone-added
+spec:
+  event: DNS Zone Added
+  match:
+    resource:
+      group: dns.networking.miloapis.com
+      resource: dnszones
+    verbs: [create]
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'actor.kind == "user" ? "human" : actor.kind == "serviceaccount" ? "automation" : "system"'
+---
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: dns-zone-removed
+spec:
+  event: DNS Zone Removed
+  match:
+    resource:
+      group: dns.networking.miloapis.com
+      resource: dnszones
+    verbs: [delete]
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'actor.kind == "user" ? "human" : actor.kind == "serviceaccount" ? "automation" : "system"'
