@@ -1,0 +1,43 @@
+# Layer-4 network load balancers. Not the console's "ALB": that is an
+# HTTPProxy, tracked as Proxy Added in proxies.yaml.
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: network-load-balancer-added
+spec:
+  event: Network Load Balancer Added
+  match:
+    resource:
+      group: networking.datumapis.com
+      resource: networkloadbalancers
+    verbs: [create]
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'actor.kind == "user" ? "human" : actor.kind == "serviceaccount" ? "automation" : "system"'
+---
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: network-load-balancer-removed
+spec:
+  event: Network Load Balancer Removed
+  match:
+    resource:
+      group: networking.datumapis.com
+      resource: networkloadbalancers
+    verbs: [delete]
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: project
+      expression: 'tenant.type in ["project", "Project"] ? tenant.name : ""'
+    - name: changeSource
+      expression: 'actor.kind == "user" ? "human" : actor.kind == "serviceaccount" ? "automation" : "system"'

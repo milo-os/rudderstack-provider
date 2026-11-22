@@ -52,6 +52,7 @@ func newTestProcessor(t *testing.T, specs map[string]analyticsv1alpha1.TrackingR
 func testOrgs() *orgs.Resolver {
 	r := orgs.NewResolver()
 	r.Set("p1", "acme")
+	r.Set("p2", "initech")
 	return r
 }
 

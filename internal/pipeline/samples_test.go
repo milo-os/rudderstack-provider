@@ -3,6 +3,7 @@ package pipeline
 import (
 	"errors"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -122,6 +123,37 @@ func TestSampleDomainRemovedByGarbageCollector(t *testing.T) {
 	// The garbage collector is not a user, whatever its user agent.
 	if got := events(sub); !slices.Equal(got, []string{"Domain Removed"}) {
 		t.Fatalf("events = %v, want only Domain Removed", got)
+	}
+}
+
+func TestSampleProjectResourcesAddedAndRemoved(t *testing.T) {
+	// Zones, tunnels and network load balancers live in projects, so their
+	// organization is the project's owner, as for domains.
+	cases := []struct {
+		group, resource, verb, event string
+	}{
+		{"dns.networking.miloapis.com", "dnszones", "create", "DNS Zone Added"},
+		{"dns.networking.miloapis.com", "dnszones", "delete", "DNS Zone Removed"},
+		{"networking.datumapis.com", "connectors", "create", "Tunnel Added"},
+		{"networking.datumapis.com", "connectors", "delete", "Tunnel Removed"},
+		{"networking.datumapis.com", "networkloadbalancers", "create", "Network Load Balancer Added"},
+		{"networking.datumapis.com", "networkloadbalancers", "delete", "Network Load Balancer Removed"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.event, func(t *testing.T) {
+			p, sub := sampleProcessor(t)
+			p.Handle(auditMsg(t, map[string]any{
+				"verb":        tc.verb,
+				"objectRef":   map[string]any{"apiGroup": tc.group, "resource": tc.resource, "namespace": "default", "name": "r1"},
+				"annotations": projectScope("p2"),
+			}))
+
+			c := callFor(t, sub, tc.event)
+			want := map[string]any{"name": "r1", "namespace": "default", "project": "p2", "changeSource": "human"}
+			if c.UserID != "u1" || c.Context["groupId"] != "initech" || !maps.Equal(c.Properties, want) {
+				t.Fatalf("call = %+v", c)
+			}
+		})
 	}
 }
 
