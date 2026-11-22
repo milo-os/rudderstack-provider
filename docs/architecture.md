@@ -116,6 +116,9 @@ good. Each event carries:
 | `DNS Zone Added` / `DNS Zone Removed` | `dns.networking.miloapis.com/dnszones` | First zone, >5, >15 org, removes zones |
 | `Network Load Balancer Added` / `Network Load Balancer Removed` | `networking.datumapis.com/networkloadbalancers` | Layer-4 load balancer adoption |
 | `Tunnel Added` / `Tunnel Removed` | `networking.datumapis.com/connectors` | >4 active tunnels |
+| `DNS Record Set Added` / `DNS Record Set Removed` | `dns.networking.miloapis.com/dnsrecordsets` | Zones in real use (with records) |
+| `Service Account Created` / `Service Account Deleted` | `iam.miloapis.com/serviceaccounts` | Automation adoption |
+| `Service Account Key Created` / `Service Account Key Deleted` | `identity.miloapis.com/serviceaccountkeys` | Automation wired up (a pipeline credential exists) |
 | `datumctl Used` (once per day) | Any request by a person (`actor.kind == "user"`) with a `datumctl/` user agent | First datumctl access, frequent / active datumctl user |
 | `Active` (once per day) | Any request by a person (`actor.kind == "user"`) | Inactivity > 14 days |
 | `group` (`name`, `displayName`) | `resourcemanager.miloapis.com/organizations` create/update | Org-level milestones |

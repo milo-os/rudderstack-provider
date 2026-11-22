@@ -127,8 +127,8 @@ func TestSampleDomainRemovedByGarbageCollector(t *testing.T) {
 }
 
 func TestSampleProjectResourcesAddedAndRemoved(t *testing.T) {
-	// Zones, tunnels and network load balancers live in projects, so their
-	// organization is the project's owner, as for domains.
+	// These resources live in projects, so their organization is the
+	// project's owner, as for domains.
 	cases := []struct {
 		group, resource, verb, event string
 	}{
@@ -138,6 +138,12 @@ func TestSampleProjectResourcesAddedAndRemoved(t *testing.T) {
 		{"networking.datumapis.com", "connectors", "delete", "Tunnel Removed"},
 		{"networking.datumapis.com", "networkloadbalancers", "create", "Network Load Balancer Added"},
 		{"networking.datumapis.com", "networkloadbalancers", "delete", "Network Load Balancer Removed"},
+		{"dns.networking.miloapis.com", "dnsrecordsets", "create", "DNS Record Set Added"},
+		{"dns.networking.miloapis.com", "dnsrecordsets", "delete", "DNS Record Set Removed"},
+		{"iam.miloapis.com", "serviceaccounts", "create", "Service Account Created"},
+		{"iam.miloapis.com", "serviceaccounts", "delete", "Service Account Deleted"},
+		{"identity.miloapis.com", "serviceaccountkeys", "create", "Service Account Key Created"},
+		{"identity.miloapis.com", "serviceaccountkeys", "delete", "Service Account Key Deleted"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.event, func(t *testing.T) {

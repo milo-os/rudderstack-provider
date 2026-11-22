@@ -16,6 +16,9 @@ resources:
 - dnszones.yaml
 - connectors.yaml
 - networkloadbalancers.yaml
+- dnsrecordsets.yaml
+- serviceaccounts.yaml
+- serviceaccountkeys.yaml
 - workloads.yaml
 - contributors.yaml
 - activity.yaml
