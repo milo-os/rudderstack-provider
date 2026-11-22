@@ -53,6 +53,14 @@ spec:
           spec:
             description: spec defines the desired state of TrackingRule
             properties:
+              anonymousId:
+                description: |-
+                  AnonymousID is a CEL expression for the RudderStack anonymousId, over
+                  the same variables as conditions. Set it instead of userId when no
+                  person made the request, such as a controller confirming a payment, so
+                  the call is not attributed to the controller's account. A rule sets
+                  userId or anonymousId, not both.
+                type: string
               call:
                 default: Track
                 description: Call is the RudderStack call to make.
@@ -206,6 +214,9 @@ spec:
             - event
             - match
             type: object
+            x-kubernetes-validations:
+            - message: set userId or anonymousId, not both
+              rule: '!has(self.userId) || !has(self.anonymousId)'
           status:
             description: status defines the observed state of TrackingRule
             properties:

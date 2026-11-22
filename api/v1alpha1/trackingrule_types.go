@@ -58,6 +58,7 @@ const (
 )
 
 // TrackingRuleSpec defines which audit events become RudderStack calls.
+// +kubebuilder:validation:XValidation:rule="!has(self.userId) || !has(self.anonymousId)",message="set userId or anonymousId, not both"
 type TrackingRuleSpec struct {
 	// Event is the RudderStack event name, for example "Domain Added". Use
 	// Object + Action naming. Ignored for Identify and Group calls.
@@ -87,6 +88,14 @@ type TrackingRuleSpec struct {
 	// a User object created by the sign-up flow.
 	// +optional
 	UserID string `json:"userId,omitempty"`
+
+	// AnonymousID is a CEL expression for the RudderStack anonymousId, over
+	// the same variables as conditions. Set it instead of userId when no
+	// person made the request, such as a controller confirming a payment, so
+	// the call is not attributed to the controller's account. A rule sets
+	// userId or anonymousId, not both.
+	// +optional
+	AnonymousID string `json:"anonymousId,omitempty"`
 
 	// GroupID is a CEL expression for the RudderStack groupId, over the same
 	// variables as conditions. Defaults to the organization the request was

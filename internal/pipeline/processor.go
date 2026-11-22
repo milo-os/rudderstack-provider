@@ -134,6 +134,9 @@ func (p *Processor) calls(msg jetstream.Msg, ev *audit.Event) []rudderstack.Mess
 // messageId because a userId can be an email address, and messageIds are logged.
 func (p *Processor) allowToday(rule *analyticsv1alpha1.TrackingRule, ev *audit.Event, m *rudderstack.Message, groupID string, redelivered bool) bool {
 	subject := m.UserID
+	if subject == "" {
+		subject = m.AnonymousID
+	}
 	if rule.Spec.Subject == analyticsv1alpha1.SubjectOrganization {
 		subject = groupID
 	}
@@ -182,6 +185,7 @@ func (p *Processor) ruleError(rule *analyticsv1alpha1.TrackingRule, ev *audit.Ev
 func newMessage(rule *analyticsv1alpha1.TrackingRule, ev *audit.Event, res *rules.Result, groupID string) rudderstack.Message {
 	m := rudderstack.Message{
 		UserID:            res.UserID,
+		AnonymousID:       res.AnonymousID,
 		MessageID:         ev.AuditID + "/" + rule.Name,
 		OriginalTimestamp: ev.Timestamp(),
 		Context: map[string]any{

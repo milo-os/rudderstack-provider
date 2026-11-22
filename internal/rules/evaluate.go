@@ -12,8 +12,11 @@ import (
 
 // Result is a rule's outcome for an event that matched it.
 type Result struct {
-	// UserID is the RudderStack userId for the call.
+	// UserID is the RudderStack userId for the call, empty when the rule
+	// sends an anonymousId instead.
 	UserID string
+	// AnonymousID is the rule's anonymousId expression result.
+	AnonymousID string
 	// GroupID is the rule's groupId expression result, or empty when the rule
 	// uses the request's organization, including when the expression returns
 	// an empty string.
@@ -77,8 +80,13 @@ func (cr *CompiledRule) Evaluate(e *audit.Event, vars map[string]any) (*Result, 
 		res.Properties[name] = v
 	}
 
-	res.UserID, err = cr.userID(e, vars)
-	if err != nil {
+	if cr.AnonymousID != nil {
+		// The acting account is not the subject, so it is not used as a
+		// fallback userId.
+		if res.AnonymousID, err = evalString(cr.AnonymousID, vars); err != nil {
+			return nil, fmt.Errorf("anonymousId: %w", err)
+		}
+	} else if res.UserID, err = cr.userID(e, vars); err != nil {
 		return nil, err
 	}
 	if cr.GroupID != nil {
