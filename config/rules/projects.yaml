@@ -1,9 +1,17 @@
+# The console deletes projects through the platform API, outside any
+# organization scope, so groupId comes from the project's owner. When the
+# response carries no project, the expression is empty and groupId falls back
+# to the request's organization.
 apiVersion: analytics.miloapis.com/v1alpha1
 kind: TrackingRule
 metadata:
   name: project-added
 spec:
   event: Project Created
+  groupId: >-
+    has(object.spec) && has(object.spec.ownerRef) &&
+    has(object.spec.ownerRef.kind) && has(object.spec.ownerRef.name) &&
+    object.spec.ownerRef.kind == "Organization" ? object.spec.ownerRef.name : ""
   match:
     resource:
       group: resourcemanager.miloapis.com
@@ -25,6 +33,10 @@ metadata:
   name: project-removed
 spec:
   event: Project Deleted
+  groupId: >-
+    has(object.spec) && has(object.spec.ownerRef) &&
+    has(object.spec.ownerRef.kind) && has(object.spec.ownerRef.name) &&
+    object.spec.ownerRef.kind == "Organization" ? object.spec.ownerRef.name : ""
   match:
     resource:
       group: resourcemanager.miloapis.com

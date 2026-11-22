@@ -15,7 +15,8 @@ type Result struct {
 	// UserID is the RudderStack userId for the call.
 	UserID string
 	// GroupID is the rule's groupId expression result, or empty when the rule
-	// uses the request's organization.
+	// uses the request's organization, including when the expression returns
+	// an empty string.
 	GroupID string
 	// Properties are the rule's evaluated properties.
 	Properties map[string]any
@@ -81,9 +82,17 @@ func (cr *CompiledRule) Evaluate(e *audit.Event, vars map[string]any) (*Result, 
 		return nil, err
 	}
 	if cr.GroupID != nil {
-		if res.GroupID, err = evalString(cr.GroupID, vars); err != nil {
+		// An empty groupId falls back to the request's organization, so an
+		// expression can override it only for the events that carry one.
+		v, err := evalScalar(cr.GroupID, vars)
+		if err != nil {
 			return nil, fmt.Errorf("groupId: %w", err)
 		}
+		s, ok := v.(string)
+		if !ok {
+			return nil, errors.New("groupId: did not evaluate to a string")
+		}
+		res.GroupID = s
 	}
 	return res, nil
 }

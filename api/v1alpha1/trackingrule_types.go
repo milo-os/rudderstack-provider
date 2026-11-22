@@ -92,7 +92,8 @@ type TrackingRuleSpec struct {
 	// variables as conditions. Defaults to the organization the request was
 	// made in, resolved from its project when the request is project-scoped.
 	// Set it when the event is about an organization other than the request's
-	// scope, such as an Organization being created.
+	// scope, such as an Organization being created. An empty result falls back
+	// to the request's organization.
 	// +optional
 	GroupID string `json:"groupId,omitempty"`
 

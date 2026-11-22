@@ -138,6 +138,45 @@ func TestSampleProjectOutsideProjectScope(t *testing.T) {
 	}
 }
 
+func TestSampleProjectDeletedInPlatformScope(t *testing.T) {
+	// The console deletes projects through the platform API, so the request
+	// has no organization scope. The organization comes from the project.
+	p, sub := sampleProcessor(t)
+	p.Handle(auditMsg(t, map[string]any{
+		"verb":           "delete",
+		"userAgent":      "Mozilla/5.0",
+		"objectRef":      map[string]any{"apiGroup": "resourcemanager.miloapis.com", "resource": "projects", "name": "p1"},
+		"responseStatus": map[string]any{"code": 200},
+		"responseObject": map[string]any{
+			"metadata": map[string]any{"name": "p1", "deletionTimestamp": "2026-11-19T10:00:00Z"},
+			"spec":     map[string]any{"ownerRef": map[string]any{"kind": "Organization", "name": "globex"}},
+		},
+		"annotations": map[string]any{"platform.miloapis.com/scope.type": "global"},
+	}))
+
+	c := callFor(t, sub, "Project Deleted")
+	if c.Context["groupId"] != "globex" || c.Properties["name"] != "p1" {
+		t.Fatalf("call = %+v", c)
+	}
+}
+
+func TestSampleProjectDeletedWithoutObject(t *testing.T) {
+	// A delete answered with a Status carries no project, so the call falls
+	// back to the request's organization scope instead of failing.
+	p, sub := sampleProcessor(t)
+	p.Handle(auditMsg(t, map[string]any{
+		"verb":           "delete",
+		"objectRef":      map[string]any{"apiGroup": "resourcemanager.miloapis.com", "resource": "projects", "name": "p1"},
+		"responseStatus": map[string]any{"code": 200},
+		"responseObject": map[string]any{"kind": "Status", "status": "Success"},
+	}))
+
+	c := callFor(t, sub, "Project Deleted")
+	if c.Context["groupId"] != "acme" {
+		t.Fatalf("call = %+v", c)
+	}
+}
+
 func TestSampleActivitySignalsAreLimited(t *testing.T) {
 	// A human's datumctl read sends datumctl Used and Active once a day.
 	p, sub := sampleProcessor(t)
