@@ -12,7 +12,10 @@ import (
 	"github.com/go-logr/logr"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 
+	dto "github.com/prometheus/client_model/go"
+
 	analyticsv1alpha1 "go.miloapis.net/rudderstack-provider/api/v1alpha1"
+	"go.miloapis.net/rudderstack-provider/internal/metrics"
 	"go.miloapis.net/rudderstack-provider/internal/rudderstack"
 	"go.miloapis.net/rudderstack-provider/internal/rules"
 )
@@ -212,6 +215,87 @@ func TestSampleProjectDeletedWithoutObject(t *testing.T) {
 	c := callFor(t, sub, "Project Deleted")
 	if c.Context["groupId"] != "acme" {
 		t.Fatalf("call = %+v", c)
+	}
+}
+
+// stripeEvent is the audit event for stripe-provider recording a core Event
+// on a PaymentMethod. stripe-provider is a system account acting outside any
+// organization scope; the Event carries its organization as an annotation.
+func stripeEvent(t *testing.T, auditID, reason string) *fakeMsg {
+	t.Helper()
+	return auditMsg(t, map[string]any{
+		"auditID":   auditID,
+		"user":      map[string]any{"username": "system:serviceaccount:stripe-provider", "uid": "stripe-sa"},
+		"userAgent": "stripe-provider/v0.1.0",
+		"objectRef": map[string]any{"apiGroup": "", "resource": "events", "namespace": "organization-globex", "name": "pm1.1234"},
+		"responseObject": map[string]any{
+			"metadata": map[string]any{
+				"name": "pm1.1234",
+				"annotations": map[string]any{
+					"platform.miloapis.com/scope.type": "Organization",
+					"platform.miloapis.com/scope.name": "globex",
+				},
+			},
+			"reason":         reason,
+			"involvedObject": map[string]any{"kind": "PaymentMethod", "namespace": "organization-globex", "name": "pm1"},
+		},
+		"annotations": map[string]any{"platform.miloapis.com/scope.type": "global"},
+	})
+}
+
+func ruleErrors(t *testing.T, rule string) float64 {
+	t.Helper()
+	var m dto.Metric
+	if err := metrics.RuleErrors.WithLabelValues(rule).Write(&m); err != nil {
+		t.Fatal(err)
+	}
+	return m.GetCounter().GetValue()
+}
+
+func TestSamplePaymentMethodStarted(t *testing.T) {
+	p, sub := sampleProcessor(t)
+	p.Handle(auditMsg(t, map[string]any{
+		"userAgent": "Mozilla/5.0",
+		"objectRef": map[string]any{"apiGroup": "billing.miloapis.com", "resource": "paymentmethods", "namespace": "organization-acme", "name": "pm1"},
+	}))
+
+	c := callFor(t, sub, "Payment Method Started")
+	if c.UserID != "u1" || c.AnonymousID != "" || c.Context["groupId"] != "acme" || c.Properties["changeSource"] != "human" {
+		t.Fatalf("call = %+v", c)
+	}
+}
+
+func TestSamplePaymentMethodAttached(t *testing.T) {
+	// Stripe confirmed the card. No person made the request, so the call is
+	// about the organization and never names stripe-provider's account.
+	p, sub := sampleProcessor(t)
+	p.Handle(stripeEvent(t, "a1", "PaymentMethodAttached"))
+
+	c := callFor(t, sub, "Payment Method Attached")
+	if c.UserID != "" || c.AnonymousID != "globex" || c.Context["groupId"] != "globex" || c.Properties["name"] != "pm1" {
+		t.Fatalf("call = %+v", c)
+	}
+}
+
+func TestSampleOtherEventsAreIgnored(t *testing.T) {
+	// Every core Event create reaches the attached rule; others must neither
+	// send nor count as rule errors.
+	p, sub := sampleProcessor(t)
+	before := ruleErrors(t, "payment-method-attached")
+	p.Handle(stripeEvent(t, "a1", "PaymentMethodFailed"))
+	p.Handle(auditMsg(t, map[string]any{
+		"auditID":        "a2",
+		"objectRef":      map[string]any{"apiGroup": "", "resource": "events", "namespace": "default", "name": "e1"},
+		"responseObject": map[string]any{"metadata": map[string]any{"name": "e1"}},
+	}))
+
+	for _, c := range sub.calls {
+		if c.Event == "Payment Method Attached" {
+			t.Fatalf("unexpected call %+v", c)
+		}
+	}
+	if after := ruleErrors(t, "payment-method-attached"); after != before {
+		t.Fatalf("rule errors went from %v to %v", before, after)
 	}
 }
 

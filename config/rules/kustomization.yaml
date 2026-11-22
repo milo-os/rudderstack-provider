@@ -19,6 +19,7 @@ resources:
 - dnsrecordsets.yaml
 - serviceaccounts.yaml
 - serviceaccountkeys.yaml
+- payments.yaml
 - workloads.yaml
 - contributors.yaml
 - activity.yaml

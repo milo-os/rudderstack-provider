@@ -71,6 +71,7 @@ change. See [`config/rules`](../config/rules).
 | `match.conditions` | CEL, OR semantics |
 | `subject` | `User` (default) or `Organization` |
 | `userId` | CEL override for the RudderStack userId |
+| `anonymousId` | CEL expression for the RudderStack anonymousId, used instead of `userId` when no person made the request; a rule sets one or the other |
 | `groupId` | CEL override for the RudderStack groupId; defaults to the request's organization, as does an empty result |
 | `limit` | Optional `OncePerDay`: send at most one call per subject per UTC day |
 | `properties` | CEL values sent with the call; nothing else leaves the platform |
@@ -119,6 +120,8 @@ good. Each event carries:
 | `DNS Record Set Added` / `DNS Record Set Removed` | `dns.networking.miloapis.com/dnsrecordsets` | Zones in real use (with records) |
 | `Service Account Created` / `Service Account Deleted` | `iam.miloapis.com/serviceaccounts` | Automation adoption |
 | `Service Account Key Created` / `Service Account Key Deleted` | `identity.miloapis.com/serviceaccountkeys` | Automation wired up (a pipeline credential exists) |
+| `Payment Method Started` / `Payment Method Removed` | `billing.miloapis.com/paymentmethods` create/delete (the user starts adding a card) | Payment intent; abandoned cards with no later Attached |
+| `Payment Method Attached` (org; `anonymousId` = org) | Core `Event` with reason `PaymentMethodAttached`, recorded by stripe-provider when Stripe first confirms the card | Payment information completed |
 | `datumctl Used` (once per day) | Any request by a person (`actor.kind == "user"`) with a `datumctl/` user agent | First datumctl access, frequent / active datumctl user |
 | `Active` (once per day) | Any request by a person (`actor.kind == "user"`) | Inactivity > 14 days |
 | `group` (`name`, `displayName`) | `resourcemanager.miloapis.com/organizations` create/update | Org-level milestones |
@@ -252,6 +255,9 @@ is consuming.
 ## Identity
 
 - `userId` is the acting user's uid unless the rule sets `userId`.
+  A rule can set `anonymousId` instead, for events no person causes (such as
+  stripe-provider confirming a card), so the call is not attributed to the
+  controller's account. Such calls are about the organization in `groupId`.
 - Sign-up sends `identify` with the user's email, which is approved for
   RudderStack.
 - `groupId` is the organization the request was made in: the scope itself
@@ -367,7 +373,6 @@ chosen; see [Why not RudderStack Profiles](#why-not-rudderstack-profiles).
 | Reverse ETL | Confirm it is on the Growth plan; otherwise the marketing tool reads BigQuery directly |
 | Marketing tool | Which destination receives the milestone traits (HubSpot, Customer.io, …) |
 | BigQuery | Only the `billing-export` dataset exists today, unrelated to analytics; `product_analytics` is new |
-| Payment information completed | Billing resource to confirm |
 | Desktop app downloaded | Not visible to the control plane; track on the download page |
 | Frequent / active datumctl user | Definition needed (lives in the milestone SQL) |
 | Galactic usage | Definition needed |

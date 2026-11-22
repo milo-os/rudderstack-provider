@@ -35,9 +35,12 @@ const (
 
 // Message is one RudderStack call.
 type Message struct {
-	Type              string    `json:"type"`
-	Event             string    `json:"event,omitempty"`
-	UserID            string    `json:"userId"`
+	Type  string `json:"type"`
+	Event string `json:"event,omitempty"`
+	// UserID or AnonymousID identifies who the call is about; RudderStack
+	// needs one of them.
+	UserID            string    `json:"userId,omitempty"`
+	AnonymousID       string    `json:"anonymousId,omitempty"`
 	GroupID           string    `json:"groupId,omitempty"`
 	MessageID         string    `json:"messageId"`
 	OriginalTimestamp time.Time `json:"originalTimestamp"`
@@ -151,6 +154,7 @@ func (d DryRunSender) Send(_ context.Context, batch []Message) error {
 			"event", m.Event,
 			"messageId", m.MessageID,
 			"userIdHash", hashID(m.UserID),
+			"anonymousIdHash", hashID(m.AnonymousID),
 			"groupId", groupID(m),
 			"originalTimestamp", m.OriginalTimestamp,
 			"properties", slices.Sorted(maps.Keys(m.Properties)),

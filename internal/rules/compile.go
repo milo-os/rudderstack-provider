@@ -30,6 +30,9 @@ type CompiledRule struct {
 	Properties map[string]cel.Program
 	// UserID is nil when the rule uses the acting user's uid.
 	UserID cel.Program
+	// AnonymousID is nil unless the rule sends an anonymousId instead of a
+	// userId.
+	AnonymousID cel.Program
 	// GroupID is nil when the rule uses the request's organization.
 	GroupID cel.Program
 }
@@ -79,6 +82,17 @@ func Compile(env *cel.Env, rule *analyticsv1alpha1.TrackingRule) (*CompiledRule,
 			errs = append(errs, fmt.Errorf("userId: %w", err))
 		} else {
 			cr.UserID = prg
+		}
+	}
+	if rule.Spec.UserID != "" && rule.Spec.AnonymousID != "" {
+		errs = append(errs, errors.New("set userId or anonymousId, not both"))
+	}
+	if rule.Spec.AnonymousID != "" {
+		prg, err := compile(env, rule.Spec.AnonymousID, cel.StringType)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("anonymousId: %w", err))
+		} else {
+			cr.AnonymousID = prg
 		}
 	}
 	if rule.Spec.GroupID != "" {

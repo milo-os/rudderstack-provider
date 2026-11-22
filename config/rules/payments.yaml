@@ -1,0 +1,80 @@
+# Adding a card takes three steps: the user creates a PaymentMethod in their
+# organization, enters the card in Stripe's form (which never touches Milo),
+# and Stripe's webhook confirms it. Started marks the first step; Attached
+# marks the confirmation, so started-but-never-attached shows abandoned cards.
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: payment-method-started
+spec:
+  event: Payment Method Started
+  match:
+    resource:
+      group: billing.miloapis.com
+      resource: paymentmethods
+    verbs: [create]
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: changeSource
+      expression: 'actor.kind == "user" ? "human" : actor.kind == "serviceaccount" ? "automation" : "system"'
+---
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: payment-method-removed
+spec:
+  event: Payment Method Removed
+  match:
+    resource:
+      group: billing.miloapis.com
+      resource: paymentmethods
+    verbs: [delete]
+  properties:
+    - name: name
+      expression: objectRef.name
+    - name: namespace
+      expression: objectRef.namespace
+    - name: changeSource
+      expression: 'actor.kind == "user" ? "human" : actor.kind == "serviceaccount" ? "automation" : "system"'
+---
+# stripe-provider records a PaymentMethodAttached Event the first time Stripe
+# confirms a payment method, scoped to its organization by the Event's
+# platform.miloapis.com/scope.name annotation. No person makes that request,
+# so the call is about the organization: anonymousId is the organization
+# rather than stripe-provider's own account.
+apiVersion: analytics.miloapis.com/v1alpha1
+kind: TrackingRule
+metadata:
+  name: payment-method-attached
+spec:
+  event: Payment Method Attached
+  subject: Organization
+  anonymousId: >-
+    has(object.metadata.annotations) &&
+    "platform.miloapis.com/scope.name" in object.metadata.annotations
+    ? object.metadata.annotations["platform.miloapis.com/scope.name"] : ""
+  groupId: >-
+    has(object.metadata.annotations) &&
+    "platform.miloapis.com/scope.name" in object.metadata.annotations
+    ? object.metadata.annotations["platform.miloapis.com/scope.name"] : ""
+  match:
+    resource:
+      group: ""
+      resource: events
+    verbs: [create]
+    conditions:
+      # Every core Event create reaches this rule, so the checks guard each
+      # field to avoid counting other Events as rule errors.
+      - name: payment-method-attached
+        expression: >-
+          has(object.reason) && object.reason == "PaymentMethodAttached" &&
+          has(object.involvedObject) && has(object.involvedObject.kind) &&
+          object.involvedObject.kind == "PaymentMethod"
+  properties:
+    - name: name
+      expression: 'has(object.involvedObject.name) ? object.involvedObject.name : ""'
+    - name: namespace
+      expression: objectRef.namespace

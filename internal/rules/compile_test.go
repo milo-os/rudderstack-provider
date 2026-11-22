@@ -14,12 +14,13 @@ func TestCompile(t *testing.T) {
 	}
 
 	tests := []struct {
-		name       string
-		conditions []analyticsv1alpha1.Condition
-		properties []analyticsv1alpha1.Property
-		userID     string
-		groupID    string
-		wantErr    string
+		name        string
+		conditions  []analyticsv1alpha1.Condition
+		properties  []analyticsv1alpha1.Property
+		userID      string
+		anonymousID string
+		groupID     string
+		wantErr     string
 	}{
 		{
 			name: "valid",
@@ -41,6 +42,21 @@ func TestCompile(t *testing.T) {
 			name:    "userId not a string",
 			userID:  `verb == "create"`,
 			wantErr: "userId: must evaluate to string",
+		},
+		{
+			name:        "anonymousId",
+			anonymousID: `objectRef.namespace`,
+		},
+		{
+			name:        "userId and anonymousId",
+			userID:      `object.metadata.name`,
+			anonymousID: `objectRef.namespace`,
+			wantErr:     "set userId or anonymousId, not both",
+		},
+		{
+			name:        "anonymousId not a string",
+			anonymousID: `1 + 1`,
+			wantErr:     "anonymousId: must evaluate to string",
 		},
 		{
 			name:       "syntax error",
@@ -65,6 +81,7 @@ func TestCompile(t *testing.T) {
 			rule.Spec.Match.Conditions = tt.conditions
 			rule.Spec.Properties = tt.properties
 			rule.Spec.UserID = tt.userID
+			rule.Spec.AnonymousID = tt.anonymousID
 			rule.Spec.GroupID = tt.groupID
 
 			cr, err := Compile(env, rule)
