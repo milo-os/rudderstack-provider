@@ -128,8 +128,8 @@ func TestJetStreamDeliversAndAcks(t *testing.T) {
 func TestJetStreamRedeliversAfterFailedSend(t *testing.T) {
 	js, cons := startJetStream(t, 30*time.Second)
 
-	// RudderStack is down for the first attempt only. The nak delay is 10s,
-	// so the redelivered attempt arrives after it.
+	// RudderStack is down for the first attempt only. The first nak delay is
+	// 10s, so the redelivered attempt arrives after it.
 	var attempts atomic.Int32
 	sender := &fakeSender{fail: func([]rudderstack.Message) error {
 		if attempts.Add(1) == 1 {
@@ -140,7 +140,7 @@ func TestJetStreamRedeliversAfterFailedSend(t *testing.T) {
 	runPipeline(t, cons, sender)
 	publish(t, js, nil)
 
-	deadline := time.Now().Add(nakDelay + 5*time.Second)
+	deadline := time.Now().Add(nakBaseDelay + 5*time.Second)
 	for {
 		pending, unacked := pendingAcks(t, cons)
 		if pending == 0 && unacked == 0 && len(sender.sent()) == 1 {

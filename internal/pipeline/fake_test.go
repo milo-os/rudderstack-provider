@@ -21,6 +21,7 @@ type fakeMsg struct {
 	mu         sync.Mutex
 	acked      bool
 	nacked     bool
+	nakDelay   time.Duration
 	inProgress int
 }
 
@@ -37,10 +38,11 @@ func (m *fakeMsg) Ack() error {
 	return nil
 }
 
-func (m *fakeMsg) NakWithDelay(time.Duration) error {
+func (m *fakeMsg) NakWithDelay(d time.Duration) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.nacked = true
+	m.nakDelay = d
 	return nil
 }
 
