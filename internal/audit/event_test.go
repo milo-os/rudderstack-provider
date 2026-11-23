@@ -116,3 +116,34 @@ func TestActorKind(t *testing.T) {
 		}
 	}
 }
+
+func TestParseNonObjectBodies(t *testing.T) {
+	// A JSON Patch request records its body as an array.
+	e, err := Parse([]byte(`{
+		"auditID": "a2",
+		"stage": "ResponseComplete",
+		"verb": "patch",
+		"objectRef": {"apiGroup": "networking.datumapis.com", "resource": "domains", "name": "example-com"},
+		"responseStatus": {"code": 200},
+		"requestObject": [{"op": "replace", "path": "/spec/domainName", "value": "example.org"}],
+		"responseObject": {"kind": "Domain", "metadata": {"name": "example-com"}}
+	}`))
+	if err != nil {
+		t.Fatalf("Parse() error = %v, want nil", err)
+	}
+	if e.RequestObject != nil {
+		t.Fatalf("RequestObject = %v, want nil for an array body", e.RequestObject)
+	}
+	if got := e.Object(); got["kind"] != "Domain" {
+		t.Fatalf("Object() = %v, want the response object", got)
+	}
+
+	for _, body := range []string{`"text"`, `42`, `true`, `null`} {
+		if _, err := Parse([]byte(`{"auditID": "a3", "requestObject": ` + body + `}`)); err != nil {
+			t.Errorf("Parse() with requestObject %s: error = %v, want nil", body, err)
+		}
+	}
+	if _, err := Parse([]byte(`{"auditID": "a4", "requestObject": [`)); err == nil {
+		t.Error("Parse() of malformed JSON: error = nil, want an error")
+	}
+}
