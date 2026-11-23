@@ -31,6 +31,12 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build \
               -X 'go.miloapis.net/rudderstack-provider/internal/version.BuildDate=${BUILD_DATE}'" \
     -a -o manager ./cmd
 
+# The runtime image is scratch, which has no CA certificates. Without them
+# every HTTPS call to a public service, such as the RudderStack data plane,
+# fails with "x509: certificate signed by unknown authority". Milo and NATS
+# are unaffected: their CAs are mounted into the pod explicitly.
+RUN apk add --no-cache ca-certificates
+
 RUN echo 'nonroot:x:65532:65532:nonroot:/home/nonroot:/sbin/nologin' > /workspace/passwd && \
     echo 'nonroot:x:65532:' > /workspace/group
 
@@ -40,6 +46,7 @@ FROM scratch
 WORKDIR /
 COPY --from=builder /workspace/passwd /etc/passwd
 COPY --from=builder /workspace/group /etc/group
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /workspace/manager .
 USER 65532:65532
 
