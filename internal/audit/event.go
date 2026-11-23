@@ -32,8 +32,8 @@ type Event struct {
 	UserAgent                string            `json:"userAgent"`
 	ObjectRef                *ObjectRef        `json:"objectRef,omitempty"`
 	ResponseStatus           *ResponseStatus   `json:"responseStatus,omitempty"`
-	RequestObject            map[string]any    `json:"requestObject,omitempty"`
-	ResponseObject           map[string]any    `json:"responseObject,omitempty"`
+	RequestObject            Body              `json:"requestObject,omitempty"`
+	ResponseObject           Body              `json:"responseObject,omitempty"`
 	RequestReceivedTimestamp time.Time         `json:"requestReceivedTimestamp"`
 	StageTimestamp           time.Time         `json:"stageTimestamp"`
 	Annotations              map[string]string `json:"annotations,omitempty"`
@@ -96,6 +96,23 @@ func (e *Event) ActorKind(serviceAccountSuffix string) string {
 type Tenant struct {
 	Type string `json:"type"`
 	Name string `json:"name"`
+}
+
+// Body is a request or response body recorded on an audit event. Bodies are
+// usually Kubernetes objects, but some are not: a JSON Patch request body is
+// an array. A body that is not a JSON object decodes as nil, so the event still
+// parses and Object falls back to the other body.
+type Body map[string]any
+
+// UnmarshalJSON decodes a JSON object and leaves any other JSON value nil.
+func (b *Body) UnmarshalJSON(data []byte) error {
+	var v any
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	m, _ := v.(map[string]any)
+	*b = m
+	return nil
 }
 
 // Parse decodes an audit event.
