@@ -190,8 +190,11 @@ pre-sign-up activity needs to be tied to accounts.
 ## Delivery guarantees
 
 - Messages are acknowledged only after RudderStack returns 2xx for every call
-  they produced. Network errors, `429` and `5xx` nack the message with a 10s
-  delay.
+  they produced. Network errors, `401`/`403`/`404`, `429` and `5xx` nack the
+  message for redelivery, after 10s on its first delivery, doubling with each
+  delivery up to 5 minutes. Messages wait in `AUDIT_EVENTS`, so an outage
+  longer than the stream's retention (48h) loses events; the provider's
+  alerts are what keep an outage shorter than that.
 - Every call has a deterministic `messageId`, so RudderStack drops duplicates
   from redelivery: `<auditID>/<rule>`, or `<rule>/<subject hash>/<date>` for
   once-per-day rules.

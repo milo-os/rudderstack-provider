@@ -16,9 +16,17 @@ import (
 )
 
 const (
-	// nakDelay is how long a message waits before redelivery after a failed
-	// send. An immediate nak would hot-loop while RudderStack is down.
-	nakDelay = 10 * time.Second
+	// nakBaseDelay is how long a message waits before its first redelivery
+	// after a failed send. An immediate nak would hot-loop while RudderStack
+	// is down.
+	nakBaseDelay = 10 * time.Second
+
+	// nakMaxDelay caps the backoff. Each failed delivery doubles the delay
+	// up to this, so a long outage redelivers each message a few hundred
+	// times rather than every 10 seconds, and sending resumes within this
+	// long of RudderStack recovering. It must stay far below the
+	// AUDIT_EVENTS retention, which is what bounds an outage without loss.
+	nakMaxDelay = 5 * time.Minute
 
 	// batchOverheadBytes covers the {"batch":[...]} envelope and the commas
 	// between calls when sizing a request body.
@@ -215,7 +223,7 @@ func (b *Batcher) send(ctx context.Context, batch []item) {
 
 	default:
 		metrics.Flushes.WithLabelValues("retry").Inc()
-		b.log.Error(err, "Failed to send batch to RudderStack, its messages will be redelivered", "calls", len(batch), "redeliverIn", nakDelay)
+		b.log.Error(err, "Failed to send batch to RudderStack, its messages will be redelivered", "calls", len(batch))
 		b.settle(batch, true)
 	}
 }
@@ -237,7 +245,7 @@ func (b *Batcher) settle(batch []item, failed bool) {
 
 	for _, o := range done {
 		if o.failed {
-			if err := o.msg.NakWithDelay(nakDelay); err != nil {
+			if err := o.msg.NakWithDelay(nakDelay(o.msg)); err != nil {
 				b.log.Error(err, "Failed to nak message")
 			}
 			metrics.MessagesNacked.Inc()
@@ -245,4 +253,18 @@ func (b *Batcher) settle(batch []item, failed bool) {
 		}
 		ack(o.msg)
 	}
+}
+
+// nakDelay is the redelivery delay for msg: nakBaseDelay on its first
+// delivery, doubling with each delivery after that, up to nakMaxDelay.
+func nakDelay(msg jetstream.Msg) time.Duration {
+	attempt := uint64(1)
+	if md, err := msg.Metadata(); err == nil && md.NumDelivered > 0 {
+		attempt = md.NumDelivered
+	}
+	delay := nakBaseDelay
+	for i := uint64(1); i < attempt && delay < nakMaxDelay; i++ {
+		delay *= 2
+	}
+	return min(delay, nakMaxDelay)
 }

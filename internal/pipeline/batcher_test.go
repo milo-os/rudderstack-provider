@@ -87,6 +87,42 @@ func TestBatcherNaksOnTemporaryFailure(t *testing.T) {
 	}
 }
 
+func TestNakDelayBacksOff(t *testing.T) {
+	tests := []struct {
+		delivered uint64
+		want      time.Duration
+	}{
+		{0, 10 * time.Second}, // no metadata count: first delivery
+		{1, 10 * time.Second},
+		{2, 20 * time.Second},
+		{3, 40 * time.Second},
+		{5, 160 * time.Second},
+		{6, 5 * time.Minute}, // 320s, capped
+		{1000, 5 * time.Minute},
+		{^uint64(0), 5 * time.Minute},
+	}
+	for _, tt := range tests {
+		if got := nakDelay(&fakeMsg{delivered: tt.delivered}); got != tt.want {
+			t.Errorf("nakDelay(delivered=%d) = %v, want %v", tt.delivered, got, tt.want)
+		}
+	}
+}
+
+func TestBatcherNaksWithBackoff(t *testing.T) {
+	// A message on its fourth delivery waits 80s, not the base 10s.
+	s := &fakeSender{fail: func([]rudderstack.Message) error { return errors.New("connection refused") }}
+	b := newTestBatcher(s, 10)
+	m := &fakeMsg{delivered: 4}
+	b.Submit(m, []rudderstack.Message{call("1")})
+	b.flush(context.Background(), false)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.nacked || m.nakDelay != 80*time.Second {
+		t.Fatalf("nacked = %v, delay = %v, want nacked with 80s", m.nacked, m.nakDelay)
+	}
+}
+
 func TestBatcherIsolatesRejectedCall(t *testing.T) {
 	s := &fakeSender{fail: func(batch []rudderstack.Message) error {
 		for _, m := range batch {
