@@ -1,5 +1,11 @@
 # Records show a zone is in real use rather than created and left empty.
 # Only create and delete: updates are frequent and say little.
+#
+# Records written by the platform itself are skipped on both sides: zone
+# defaults from the DNS controller, records external-dns publishes for
+# proxies, and their cleanup. In staging these were about 98% of record set
+# events and say nothing about what a customer did. Both rules filter the
+# same way so Added and Removed stay paired.
 apiVersion: analytics.miloapis.com/v1alpha1
 kind: TrackingRule
 metadata:
@@ -11,6 +17,9 @@ spec:
       group: dns.networking.miloapis.com
       resource: dnsrecordsets
     verbs: [create]
+    conditions:
+      - name: not-platform
+        expression: 'actor.kind != "system"'
   properties:
     - name: name
       expression: objectRef.name
@@ -32,6 +41,9 @@ spec:
       group: dns.networking.miloapis.com
       resource: dnsrecordsets
     verbs: [delete]
+    conditions:
+      - name: not-platform
+        expression: 'actor.kind != "system"'
   properties:
     - name: name
       expression: objectRef.name

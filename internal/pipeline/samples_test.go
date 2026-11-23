@@ -354,3 +354,44 @@ func TestSampleMachineAccountIsNotAUser(t *testing.T) {
 		t.Fatalf("changeSource = %v, want automation", c.Properties["changeSource"])
 	}
 }
+
+func TestSampleDNSRecordSetsByPlatformAreSkipped(t *testing.T) {
+	// Controllers write most record sets: zone defaults and records that
+	// external-dns publishes for proxies. Neither side of those is sent, so
+	// Added and Removed stay paired. Machine accounts are customers and still
+	// count.
+	for _, tc := range []struct {
+		username, want string
+	}{
+		{"system:control@networking.datumapis.com", ""},
+		{"system:control@dns.networking.miloapis.com", ""},
+		{"system:control@platform.miloapis.com", ""},
+		{"ci-p8emii@project-zdhcz.iam.datumapis.com", "automation"},
+	} {
+		for _, v := range []struct{ verb, event string }{
+			{"create", "DNS Record Set Added"},
+			{"delete", "DNS Record Set Removed"},
+		} {
+			t.Run(tc.username+"/"+v.verb, func(t *testing.T) {
+				p, sub := sampleProcessor(t)
+				p.ServiceAccountEmailSuffix = "iam.datumapis.com"
+				p.Handle(auditMsg(t, map[string]any{
+					"verb":        v.verb,
+					"user":        map[string]any{"username": tc.username, "uid": "x1"},
+					"objectRef":   map[string]any{"apiGroup": "dns.networking.miloapis.com", "resource": "dnsrecordsets", "namespace": "default", "name": "r1"},
+					"annotations": projectScope("p2"),
+				}))
+
+				if tc.want == "" {
+					if slices.Contains(events(sub), v.event) {
+						t.Fatalf("events = %v, want no %q for a platform actor", events(sub), v.event)
+					}
+					return
+				}
+				if c := callFor(t, sub, v.event); c.Properties["changeSource"] != tc.want {
+					t.Fatalf("changeSource = %v, want %v", c.Properties["changeSource"], tc.want)
+				}
+			})
+		}
+	}
+}
