@@ -3,10 +3,16 @@
 ##
 ## Add/remove rules match every actor, not only humans: resources are often
 ## removed by the system (the garbage collector deletes a project's
-## resources), and Profiles needs every removal to keep counts right. The
-## changeSource property lets Profiles count only human actions where that
-## matters, and name/namespace/project identify the resource so a removal can
-## be matched to its add whoever made it.
+## resources), and the milestone queries need every removal to keep counts
+## right. The changeSource property lets the queries count only human actions
+## where that matters, and name/namespace/project identify the resource so a
+## removal can be matched to its add whoever made it.
+##
+## The exception is a resource the platform itself creates and deletes in
+## volume, where neither side is a customer action: DNS record sets skip
+## system actors on both add and remove, so the pair stays balanced.
+## Internal test accounts are excluded per environment with EXCLUDE_*, not
+## in these rules.
 resources:
 - users.yaml
 - organizations.yaml

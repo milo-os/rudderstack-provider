@@ -17,7 +17,7 @@ const (
 
 var (
 	// Events counts consumed audit events by outcome: invalid, untracked,
-	// unmatched or matched.
+	// excluded, unmatched or matched.
 	Events = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Name:      "events_total",

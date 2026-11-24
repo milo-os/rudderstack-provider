@@ -98,7 +98,11 @@ Every "added" event has a matching "removed" event so the milestone queries
 can compute current counts. These rules match every actor, not only humans: resources are
 often removed by the system (deleting a project makes the garbage collector
 delete its resources), and a missed removal would leave a count too high for
-good. Each event carries:
+good. The exception is DNS record sets, which platform controllers create and
+delete in volume (zone defaults, external-dns records for proxies): both
+rules skip `system` actors, so the pair stays balanced. Internal test
+accounts are dropped before any rule by `EXCLUDE_*` (see Deployment). Each
+event carries:
 
 - `name`, `namespace` and `project`, which identify the resource, so the
   queries match a removal to its add regardless of who made either.
@@ -322,6 +326,13 @@ supplies:
 - `NATS_URL` and the NATS client certificate (`NATS_TLS_*`)
 - `SERVICE_ACCOUNT_EMAIL_SUFFIX`, so customer machine accounts are not
   counted as people
+- `EXCLUDE_USERS`, `EXCLUDE_PROJECTS` and `EXCLUDE_ORGS`, the internal test
+  users, canaries and integration suites whose activity is never sent. They
+  are checked before any rule, against the actor, the project or
+  organization the request was made in or acts on, and each call's `userId`
+  and organization. They are environment settings, not rule conditions,
+  because the IDs differ per environment and every rule would need them.
+  Excluded events count as `events_total{result="excluded"}`.
 - `RUDDERSTACK_DATA_PLANE_URL` (must be `https://`), `DRY_RUN=false`, and a
   Secret named `rudderstack-provider-write-key` with key `writeKey`
 

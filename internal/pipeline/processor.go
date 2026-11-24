@@ -50,6 +50,8 @@ type Processor struct {
 	// ServiceAccountEmailSuffix identifies customer machine accounts, so
 	// rules can tell them from people through actor.kind.
 	ServiceAccountEmailSuffix string
+	// Exclude lists accounts whose activity is never sent.
+	Exclude Exclusions
 }
 
 // Handle processes one JetStream message. Messages that produce no calls are
@@ -68,10 +70,19 @@ func (p *Processor) Handle(msg jetstream.Msg) {
 		ack(msg)
 		return
 	}
+	if p.Exclude.event(ev) {
+		metrics.Events.WithLabelValues("excluded").Inc()
+		ack(msg)
+		return
+	}
 
-	calls := p.calls(msg, ev)
+	calls, excluded := p.calls(msg, ev)
 	if len(calls) == 0 {
-		metrics.Events.WithLabelValues("unmatched").Inc()
+		if excluded {
+			metrics.Events.WithLabelValues("excluded").Inc()
+		} else {
+			metrics.Events.WithLabelValues("unmatched").Inc()
+		}
 		ack(msg)
 		return
 	}
@@ -79,12 +90,12 @@ func (p *Processor) Handle(msg jetstream.Msg) {
 	p.Batcher.Submit(msg, calls)
 }
 
-// calls evaluates every rule against ev and returns the calls to send.
-func (p *Processor) calls(msg jetstream.Msg, ev *audit.Event) []rudderstack.Message {
+// calls evaluates every rule against ev and returns the calls to send, and
+// whether any call was dropped because it is about an excluded account.
+func (p *Processor) calls(msg jetstream.Msg, ev *audit.Event) (calls []rudderstack.Message, excluded bool) {
 	var (
-		calls []rudderstack.Message
-		vars  map[string]any
-		org   *string
+		vars map[string]any
+		org  *string
 	)
 	// A redelivered message is resent in full: its once-per-day keys were
 	// already taken by its first delivery, whose send failed.
@@ -119,13 +130,18 @@ func (p *Processor) calls(msg jetstream.Msg, ev *audit.Event) []rudderstack.Mess
 		}
 
 		m := newMessage(rule, ev, res, groupID)
+		// Checked before the limiter so an excluded call takes no key.
+		if p.Exclude.call(m, groupID) {
+			excluded = true
+			continue
+		}
 		if rule.Spec.Limit == analyticsv1alpha1.LimitOncePerDay && !p.allowToday(rule, ev, &m, groupID, redelivered) {
 			continue
 		}
 		metrics.RuleMatches.WithLabelValues(rule.Name).Inc()
 		calls = append(calls, m)
 	}
-	return calls
+	return calls, excluded
 }
 
 // allowToday applies a once-per-day limit. It gives m a messageId shared by
