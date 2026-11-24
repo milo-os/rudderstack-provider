@@ -39,6 +39,10 @@ type pipelineOptions struct {
 
 	serviceAccountEmailSuffix string
 
+	excludeUsers    string
+	excludeProjects string
+	excludeOrgs     string
+
 	batch pipeline.BatchConfig
 }
 
@@ -59,6 +63,12 @@ func (o *pipelineOptions) bindFlags(fs *flag.FlagSet) {
 	fs.StringVar(&o.serviceAccountEmailSuffix, "service-account-email-suffix", "",
 		"Domain suffix of customer machine account emails, which rules see as actor.kind \"serviceaccount\". "+
 			"When empty, machine accounts count as users.")
+	fs.StringVar(&o.excludeUsers, "exclude-users", "",
+		"Comma-separated user uids or usernames whose activity, and calls about them, are never sent.")
+	fs.StringVar(&o.excludeProjects, "exclude-projects", "",
+		"Comma-separated project names whose activity is never sent.")
+	fs.StringVar(&o.excludeOrgs, "exclude-orgs", "",
+		"Comma-separated organization names whose activity, and calls about them, are never sent.")
 	fs.IntVar(&o.batch.MaxCalls, "batch-max-calls", 100, "Most calls in one request to RudderStack.")
 	fs.IntVar(&o.batch.MaxBytes, "batch-max-bytes", rudderstack.MaxBatchBytes,
 		"Largest request body sent to RudderStack. Capped at RudderStack's limit.")
@@ -154,6 +164,9 @@ func setupPipeline(ctx context.Context, mgr ctrl.Manager, o *pipelineOptions, st
 	if o.serviceAccountEmailSuffix == "" {
 		log.Info("No --service-account-email-suffix set; customer machine accounts count as users")
 	}
+	exclude := o.exclusions()
+	// Counts only: excluded usernames can be email addresses.
+	log.Info("Excluded accounts", "users", len(exclude.Users), "projects", len(exclude.Projects), "orgs", len(exclude.Orgs))
 
 	var sender rudderstack.Sender = rudderstack.NewClient(o.dataPlaneURL, os.Getenv(writeKeyEnv), o.batch.SendTimeout)
 	if o.dryRun {
@@ -172,6 +185,7 @@ func setupPipeline(ctx context.Context, mgr ctrl.Manager, o *pipelineOptions, st
 			Log:     log.WithName("processor"),
 
 			ServiceAccountEmailSuffix: o.serviceAccountEmailSuffix,
+			Exclude:                   exclude,
 		},
 		Synced: func() bool { return store.HasSynced() && resolver.HasSynced() },
 		Log:    log,
@@ -185,6 +199,14 @@ func setupPipeline(ctx context.Context, mgr ctrl.Manager, o *pipelineOptions, st
 		return nil, err
 	}
 	return nc.Close, nil
+}
+
+func (o *pipelineOptions) exclusions() pipeline.Exclusions {
+	return pipeline.NewExclusions(
+		strings.Split(o.excludeUsers, ","),
+		strings.Split(o.excludeProjects, ","),
+		strings.Split(o.excludeOrgs, ","),
+	)
 }
 
 // checkBucketTTL fails when the limits bucket would keep keys forever, or

@@ -63,6 +63,9 @@ spec:
             - --rudderstack-data-plane-url=$(RUDDERSTACK_DATA_PLANE_URL)
             - --dry-run=$(DRY_RUN)
             - --service-account-email-suffix=$(SERVICE_ACCOUNT_EMAIL_SUFFIX)
+            - --exclude-users=$(EXCLUDE_USERS)
+            - --exclude-projects=$(EXCLUDE_PROJECTS)
+            - --exclude-orgs=$(EXCLUDE_ORGS)
           env:
             - name: LEADER_ELECT
               value: "true"
@@ -96,6 +99,15 @@ spec:
             # Domain suffix of customer machine account emails, so rules can
             # tell them from people. Empty counts them as people.
             - name: SERVICE_ACCOUNT_EMAIL_SUFFIX
+              value: ""
+            # Comma-separated accounts whose activity is never sent, such as
+            # internal test users, canaries and integration suites. Set per
+            # environment, since the IDs differ.
+            - name: EXCLUDE_USERS
+              value: ""
+            - name: EXCLUDE_PROJECTS
+              value: ""
+            - name: EXCLUDE_ORGS
               value: ""
             - name: RUDDERSTACK_WRITE_KEY
               valueFrom:
