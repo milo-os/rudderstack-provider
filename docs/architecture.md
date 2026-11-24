@@ -98,7 +98,11 @@ Every "added" event has a matching "removed" event so the milestone queries
 can compute current counts. These rules match every actor, not only humans: resources are
 often removed by the system (deleting a project makes the garbage collector
 delete its resources), and a missed removal would leave a count too high for
-good. Each event carries:
+good. The exception is DNS record sets, which platform controllers create and
+delete in volume (zone defaults, external-dns records for proxies): both
+rules skip `system` actors, so the pair stays balanced. Internal test
+accounts are dropped before any rule by `EXCLUDE_*` (see Deployment). Each
+event carries:
 
 - `name`, `namespace` and `project`, which identify the resource, so the
   queries match a removal to its add regardless of who made either.
