@@ -8,5 +8,10 @@ spec:
   # refuses to start with a TTL under 24h.
   ttl: 25h
   history: 1
+  # Bounds the bucket, which NATSStreamNoSizeLimit requires. It holds about
+  # two once-per-day keys per active person, so 64 MiB covers hundreds of
+  # thousands of daily users. When full, the limiter's writes fail and calls
+  # are sent anyway, deduplicated by messageId.
+  maxBytes: 67108864
   storage: file
   replicas: 3
