@@ -166,7 +166,8 @@ func setupPipeline(ctx context.Context, mgr ctrl.Manager, o *pipelineOptions, st
 	}
 	exclude := o.exclusions()
 	// Counts only: excluded usernames can be email addresses.
-	log.Info("Excluded accounts", "users", len(exclude.Users), "projects", len(exclude.Projects), "orgs", len(exclude.Orgs))
+	log.Info("Excluded accounts",
+		"users", len(exclude.Users), "projects", len(exclude.Projects), "orgs", len(exclude.Orgs))
 
 	var sender rudderstack.Sender = rudderstack.NewClient(o.dataPlaneURL, os.Getenv(writeKeyEnv), o.batch.SendTimeout)
 	if o.dryRun {
