@@ -40,7 +40,7 @@ var _ = Describe("TrackingRule Controller", func() {
 
 	newRule := func(name, condition string) *analyticsv1alpha1.TrackingRule {
 		return &analyticsv1alpha1.TrackingRule{
-			ObjectMeta: metav1.ObjectMeta{Name: name},
+			Name: name,
 			Spec: analyticsv1alpha1.TrackingRuleSpec{
 				Event: "Domain Added",
 				Match: analyticsv1alpha1.Match{
