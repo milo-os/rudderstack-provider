@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   ci:
-    uses: datum-cloud/actions/.github/workflows/ci-basic.yaml@v1.28.0
+    uses: datum-cloud/actions/.github/workflows/ci-basic.yaml@v1.31.0
     with:
       # The controller tests need envtest's API server binaries, which
       # `make test` installs and plain `go test ./...` does not.
